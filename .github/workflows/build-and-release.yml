@@ -208,14 +208,14 @@ jobs:
           powershell -Command "Start-Process is.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR=C:\Program Files (x86)\Inno Setup' -Wait"
 
           echo "CY-CLI is licensed under the Apache License 2.0." > license.txt
-          echo "See https://github.com/SYMBIOTYC/cy-cli/blob/main/LICENSE" >> license.txt
+          echo "See https://github.com/SYMBIOTYC/CY-CLI/blob/main/LICENSE" >> license.txt
 
           cat > installer.iss << ISSEOF
           ; CY-CLI Windows Installer
           #define MyAppName "CY-CLI"
           #define MyAppVersion "$VERSION"
           #define MyAppPublisher "SYMBIOTYC"
-          #define MyAppURL "https://github.com/SYMBIOTYC/cy-cli"
+          #define MyAppURL "https://github.com/SYMBIOTYC/CY-CLI"
           #define MyAppExeName "cy-wrapper.ps1"
 
           [Setup]

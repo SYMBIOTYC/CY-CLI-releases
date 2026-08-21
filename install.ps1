@@ -3,7 +3,7 @@
 
 param(
     [string]$InstallDir = "$env:USERPROFILE\.local\bin",
-    [string]$Repo = "SYMBIOTYC/cy-cli",
+    [string]$Repo = "SYMBIOTYC/CY-CLI",
     [string]$StoreDir = "$env:USERPROFILE\.local\share\cy"
 )
 

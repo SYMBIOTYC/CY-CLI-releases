@@ -7,18 +7,18 @@
 ### macOS / Linux (self-updating installer v2)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SYMBIOTYC/cy-cli/main/install-v2.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SYMBIOTYC/CY-CLI/main/install-v2.sh | bash
 ```
 
 ### Windows (self-updating installer v2)
 
 ```powershell
-irm https://raw.githubusercontent.com/SYMBIOTYC/cy-cli/main/install-v2.ps1 | iex
+irm https://raw.githubusercontent.com/SYMBIOTYC/CY-CLI/main/install-v2.ps1 | iex
 ```
 
 ### macOS (.dmg)
 
-Скачайте `.dmg` из [Releases](https://github.com/SYMBIOTYC/cy-cli/releases) и перетащите `CY-CLI.app` в `/Applications`.
+Скачайте `.dmg` из [Releases](https://github.com/SYMBIOTYC/CY-CLI/releases) и перетащите `CY-CLI.app` в `/Applications`.
 
 ## Поддерживаемые платформы
 

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # CY-CLI Installer v2 (self-updating)
-# Repo: https://github.com/SYMBIOTYC/cy-cli
+# Repo: https://github.com/SYMBIOTYC/CY-CLI
 
-REPO="SYMBIOTYC/cy-cli"
+REPO="SYMBIOTYC/CY-CLI"
 INSTALL_DIR="${CY_INSTALL_DIR:-$HOME/.local/bin}"
 CY_STORE_DIR="${CY_STORE_DIR:-$HOME/.local/share/cy}"
 
@@ -71,7 +71,7 @@ install_wrapper() {
 set -euo pipefail
 
 # CY-CLI Self-Updating Wrapper (embedded)
-CY_REPO="${CY_REPO:-SYMBIOTYC/cy-cli}"
+CY_REPO="${CY_REPO:-SYMBIOTYC/CY-CLI}"
 CY_INSTALL_DIR="${CY_INSTALL_DIR:-${HOME}/.local/share/cy}"
 CY_VERSION_FILE="${CY_INSTALL_DIR}/VERSION"
 CY_BIN_DIR="${CY_INSTALL_DIR}/bin"

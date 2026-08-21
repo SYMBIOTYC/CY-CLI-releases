@@ -5,7 +5,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 
-$CY_REPO = $env:CY_REPO -ne $null ? $env:CY_REPO : "SYMBIOTYC/cy-cli"
+$CY_REPO = $env:CY_REPO -ne $null ? $env:CY_REPO : "SYMBIOTYC/CY-CLI"
 $CY_INSTALL_DIR = $env:CY_INSTALL_DIR -ne $null ? $env:CY_INSTALL_DIR : "$env:USERPROFILE\.local\share\cy"
 $CY_VERSION_FILE = Join-Path $CY_INSTALL_DIR "VERSION"
 $CY_BIN_DIR = Join-Path $CY_INSTALL_DIR "bin"

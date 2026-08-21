@@ -4,7 +4,7 @@ set -euo pipefail
 # CY-CLI Installer with Self-Updating Wrapper
 # Installs cy-wrapper.sh which auto-updates the real binary from GitHub Releases
 
-REPO="SYMBIOTYC/cy-cli"
+REPO="SYMBIOTYC/CY-CLI"
 INSTALL_DIR="${CY_INSTALL_DIR:-$HOME/.local/bin}"
 CY_STORE_DIR="${CY_STORE_DIR:-$HOME/.local/share/cy}"
 

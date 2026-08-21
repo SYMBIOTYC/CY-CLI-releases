@@ -4,7 +4,7 @@ set -euo pipefail
 # CY-CLI Self-Updating Wrapper
 # Проверяет обновления на GitHub Releases и автоматически обновляет бинарник.
 
-CY_REPO="${CY_REPO:-SYMBIOTYC/cy-cli}"
+CY_REPO="${CY_REPO:-SYMBIOTYC/CY-CLI}"
 CY_INSTALL_DIR="${CY_INSTALL_DIR:-${HOME}/.local/share/cy}"
 CY_VERSION_FILE="${CY_INSTALL_DIR}/VERSION"
 CY_BIN_DIR="${CY_INSTALL_DIR}/bin"
