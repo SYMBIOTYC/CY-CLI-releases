@@ -1,4 +1,4 @@
-name: Build macOS DMG Native
+name: Build macOS DMG v7
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Build macOS DMG
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - name: Checkout private source code
         uses: actions/checkout@v4
@@ -28,24 +28,23 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
-          cache: true
-
-      - name: Install rust-src
-        run: rustup component add rust-src
+      - name: Install dependencies
+        run: |
+          brew install rustup
+          rustup-init -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup target add x86_64-apple-darwin
+          rustup component add rust-src
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
-        run: cargo build --bin cy --release --target aarch64-apple-darwin
+        run: cargo build --bin cy --release --target x86_64-apple-darwin
 
       - name: Package macOS .dmg
         run: |
-          BIN="cy-cli-private/.fundament/codex-rs/target/aarch64-apple-darwin/release/cy"
+          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-apple-darwin/release/cy"
           APP_NAME="CY-CLI.app"
-          DMG_NAME="cy-aarch64-apple-darwin.dmg"
+          DMG_NAME="cy-x86_64-apple-darwin.dmg"
 
           mkdir -p "$APP_NAME/Contents/MacOS"
           mkdir -p "$APP_NAME/Contents/Resources"
@@ -75,7 +74,7 @@ jobs:
             <key>CFBundleIconFile</key>
             <string>icon</string>
             <key>LSMinimumSystemVersion</key>
-            <string>13.0</string>
+            <string>10.15</string>
             <key>NSHighResolutionCapable</key>
             <true/>
           </dict>
@@ -89,6 +88,6 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cy-aarch64-apple-darwin-dmg
-          path: cy-aarch64-apple-darwin.dmg
+          name: cy-x86_64-apple-darwin-dmg
+          path: cy-x86_64-apple-darwin.dmg
           retention-days: 90
