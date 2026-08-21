@@ -19,30 +19,21 @@ jobs:
             runner: ubuntu-latest
             os: linux
             artifact: cy-x86_64-unknown-linux-gnu.tar.gz
-          - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
-            os: linux
-            artifact: cy-aarch64-unknown-linux-gnu.tar.gz
-          - target: x86_64-apple-darwin
-            runner: macos-latest
-            os: macos
-            artifact: cy-x86_64-apple-darwin.dmg
-            installer: cy-x86_64-apple-darwin.pkg
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: macos-14
             os: macos
             artifact: cy-aarch64-apple-darwin.dmg
             installer: cy-aarch64-apple-darwin.pkg
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            os: macos
+            artifact: cy-x86_64-apple-darwin.dmg
+            installer: cy-x86_64-apple-darwin.pkg
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             os: windows
             artifact: cy-x86_64-pc-windows-msvc.zip
             installer: CY-CLI-x86_64-setup.exe
-          - target: aarch64-pc-windows-msvc
-            runner: windows-latest
-            os: windows
-            artifact: cy-aarch64-pc-windows-msvc.zip
-            installer: CY-CLI-aarch64-setup.exe
 
     steps:
       - name: Checkout private source code
@@ -53,23 +44,11 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
-      - name: Install Rust and targets
-        shell: bash
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          source $HOME/.cargo/env
-          rustup --version
-          rustc --version
-          cargo --version
-          echo "Installing target: ${{ matrix.target }}"
-          rustup target add ${{ matrix.target }} --toolchain stable
-          echo "Verifying target installation..."
-          rustup target list --installed | grep "${{ matrix.target }}"
-          if ! rustup target list --installed | grep -q "${{ matrix.target }}"; then
-            echo "Target ${{ matrix.target }} not installed!"
-            exit 1
-          fi
-          echo "Target ${{ matrix.target }} successfully installed"
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          cache: true
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
