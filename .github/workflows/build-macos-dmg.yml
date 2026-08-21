@@ -1,4 +1,4 @@
-name: Build macOS DMG v2
+name: Build macOS DMG v5
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Build macOS DMG
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout private source code
         uses: actions/checkout@v4
