@@ -31,33 +31,32 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.60.0
-          targets: x86_64-pc-windows-msvc
-          cache: true
+          toolchain: stable
+          targets: x86_64-pc-windows-gnu
+          cache: false
 
       - name: Patch mio for Windows
         working-directory: cy-cli-private/.fundament/codex-rs
         run: |
           cargo update -p mio --precise 1.2.0
           cargo tree -p mio
-          echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
-        run: cargo build --bin cy --release --target x86_64-pc-windows-msvc
+        run: cargo build --bin cy --release --target x86_64-pc-windows-gnu
 
       - name: Package Windows artifact
         shell: bash
         run: |
-          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-pc-windows-msvc/release/cy.exe"
+          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-pc-windows-gnu/release/cy.exe"
           cp "$BIN" cy.exe
-          powershell Compress-Archive -Path cy.exe -DestinationPath cy-x86_64-pc-windows-msvc.zip
-          powershell -Command "Get-FileHash -Algorithm SHA256 cy-x86_64-pc-windows-msvc.zip | Select-Object -ExpandProperty Hash | Out-File -FilePath cy-x86_64-pc-windows-msvc.zip.sha256"
+          powershell Compress-Archive -Path cy.exe -DestinationPath cy-x86_64-pc-windows-gnu.zip
+          powershell -Command "Get-FileHash -Algorithm SHA256 cy-x86_64-pc-windows-gnu.zip | Select-Object -ExpandProperty Hash | Out-File -FilePath cy-x86_64-pc-windows-gnu.zip.sha256"
 
       - name: Build Windows .exe installer
         shell: bash
         run: |
-          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-pc-windows-msvc/release/cy.exe"
+          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-pc-windows-gnu/release/cy.exe"
           WRAPPER="${{ github.workspace }}/tools/cy-wrapper.ps1"
           INSTALLER="CY-CLI-x86_64-setup.exe"
           VERSION="${{ github.event.inputs.tag }}"
@@ -143,10 +142,10 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: x86_64-pc-windows-msvc
+          name: x86_64-pc-windows-gnu
           path: |
-            cy-x86_64-pc-windows-msvc.zip
-            cy-x86_64-pc-windows-msvc.zip.sha256
+            cy-x86_64-pc-windows-gnu.zip
+            cy-x86_64-pc-windows-gnu.zip.sha256
             CY-CLI-x86_64-setup.exe
             CY-CLI-x86_64-setup.exe.sha256
           retention-days: 90
