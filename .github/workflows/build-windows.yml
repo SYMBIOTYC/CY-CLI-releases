@@ -31,7 +31,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.79.0
+          toolchain: 1.70.0
           targets: x86_64-pc-windows-msvc
           cache: true
 
@@ -39,6 +39,7 @@ jobs:
         working-directory: cy-cli-private/.fundament/codex-rs
         run: |
           cargo update -p mio --precise 1.2.0
+          cargo tree -p mio
           echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
