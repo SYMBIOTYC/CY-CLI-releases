@@ -38,7 +38,7 @@ jobs:
       - name: Patch mio for Windows
         working-directory: cy-cli-private/.fundament/codex-rs
         run: |
-          cargo update -p mio
+          cargo update -p mio --precise 1.2.0
           echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
