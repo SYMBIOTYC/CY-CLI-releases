@@ -34,6 +34,14 @@ jobs:
           toolchain: stable
           targets: x86_64-pc-windows-gnu
           cache: false
+          components: rust-std
+
+      - name: Install MinGW for GNU target
+        shell: bash
+        run: |
+          curl -fsSL -o mingw.exe https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0/winlibs-x86_64-13.2.0-mingw-w64ucrt-ucrt-snapshot20240113.7z
+          7z x mingw.exe -oC:\mingw64
+          echo "C:\mingw64\bin" >> $GITHUB_PATH
 
       - name: Patch mio for Windows
         working-directory: cy-cli-private/.fundament/codex-rs
