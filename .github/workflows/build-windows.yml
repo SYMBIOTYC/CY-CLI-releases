@@ -1,4 +1,4 @@
-name: Build Windows cy-cli
+name: Build Windows
 
 on:
   workflow_dispatch:
@@ -33,6 +33,12 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
           cache: true
+
+      - name: Patch mio for Windows
+        working-directory: cy-cli-private/.fundament/codex-rs
+        run: |
+          cargo update -p mio
+          echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
