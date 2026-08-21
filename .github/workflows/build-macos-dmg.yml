@@ -1,4 +1,4 @@
-name: Build macOS DMG v7
+name: Build macOS DMG Final
 
 on:
   workflow_dispatch:
@@ -18,7 +18,8 @@ permissions:
 jobs:
   build:
     name: Build macOS DMG
-    runs-on: macos-13
+    runs-on: macos-latest
+    concurrency: build-macos-dmg
     steps:
       - name: Checkout private source code
         uses: actions/checkout@v4
@@ -28,13 +29,14 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
-      - name: Install dependencies
-        run: |
-          brew install rustup
-          rustup-init -y --profile minimal --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          rustup target add x86_64-apple-darwin
-          rustup component add rust-src
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+          cache: true
+
+      - name: Install rust-src
+        run: rustup component add rust-src
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
