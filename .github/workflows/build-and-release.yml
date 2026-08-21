@@ -53,14 +53,16 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-          cache: true
-
-      - name: Add target
-        run: rustup target add ${{ matrix.target }}
+      - name: Install Rust and targets
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          source $HOME/.cargo/env
+          rustup --version
+          rustc --version
+          cargo --version
+          rustup target add ${{ matrix.target }} --toolchain stable
+          rustup target list --installed | grep "${{ matrix.target }}"
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
