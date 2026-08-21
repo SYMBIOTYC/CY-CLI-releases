@@ -61,8 +61,15 @@ jobs:
           rustup --version
           rustc --version
           cargo --version
+          echo "Installing target: ${{ matrix.target }}"
           rustup target add ${{ matrix.target }} --toolchain stable
+          echo "Verifying target installation..."
           rustup target list --installed | grep "${{ matrix.target }}"
+          if ! rustup target list --installed | grep -q "${{ matrix.target }}"; then
+            echo "Target ${{ matrix.target }} not installed!"
+            exit 1
+          fi
+          echo "Target ${{ matrix.target }} successfully installed"
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
