@@ -31,13 +31,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.81.0
           targets: x86_64-pc-windows-msvc
           cache: true
 
       - name: Patch mio for Windows
         working-directory: cy-cli-private/.fundament/codex-rs
         run: |
-          cargo update -p mio --precise 0.8.11
+          cargo update -p mio
           echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
