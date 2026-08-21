@@ -1,0 +1,163 @@
+name: Build macOS cy-cli
+
+on:
+  repository_dispatch:
+    types: [release-build]
+  workflow_dispatch:
+    inputs:
+      private_repo:
+        description: 'Private source repository (org/name)'
+        required: true
+        default: 'SYMBIOTYC/cy-cli'
+      tag:
+        description: 'Git tag or branch to build'
+        required: true
+        default: 'v0.1.5'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build x86_64-apple-darwin
+    runs-on: macos-13
+    steps:
+      - name: Checkout private source code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.private_repo || github.event.client_payload.private_repo }}
+          ref: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+          token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
+          path: cy-cli-private
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+          cache: true
+
+      - name: Install rust-src component
+        run: rustup component add rust-src
+
+      - name: Ensure macOS target is installed
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Build release binary
+        working-directory: cy-cli-private/.fundament/codex-rs
+        run: cargo build --bin cy --release --target x86_64-apple-darwin
+
+      - name: Strip binary
+        run: |
+          strip cy-cli-private/.fundament/codex-rs/target/x86_64-apple-darwin/release/cy || true
+          upx --best --lzma cy-cli-private/.fundament/codex-rs/target/x86_64-apple-darwin/release/cy || true
+
+      - name: Package macOS .dmg
+        run: |
+          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-apple-darwin/release/cy"
+          APP_NAME="CY-CLI.app"
+          DMG_NAME="cy-x86_64-apple-darwin.dmg"
+
+          mkdir -p "$APP_NAME/Contents/MacOS"
+          mkdir -p "$APP_NAME/Contents/Resources"
+
+          cp "$BIN" "$APP_NAME/Contents/MacOS/cy"
+          chmod +x "$APP_NAME/Contents/MacOS/cy"
+
+          cat > "$APP_NAME/Contents/Info.plist" << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>cy</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.symbiotyc.cy-cli</string>
+            <key>CFBundleName</key>
+            <string>CY-CLI</string>
+            <key>CFBundleDisplayName</key>
+            <string>CY-CLI</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleSignature</key>
+            <string>????</string>
+            <key>CFBundleIconFile</key>
+            <string>icon</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.15</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+          hdiutil create -volname "CY-CLI" -srcfolder "$APP_NAME" -ov -format UDZO "$DMG_NAME"
+          echo "Created $DMG_NAME"
+          ls -lh "$DMG_NAME"
+
+      - name: Build macOS .pkg installer
+        run: |
+          BIN="cy-cli-private/.fundament/codex-rs/target/x86_64-apple-darwin/release/cy"
+          WRAPPER="${{ github.workspace }}/tools/cy-wrapper.sh"
+          VERSION="${{ github.event.inputs.tag || github.event.client_payload.tag }}"
+          VERSION="${VERSION#v}"
+          PKG_NAME="cy-x86_64-apple-darwin.pkg"
+
+          STAGING=$(mktemp -d)
+          trap "rm -rf $STAGING" EXIT
+
+          mkdir -p "$STAGING/usr/local/lib/cy/bin"
+          mkdir -p "$STAGING/usr/local/bin"
+
+          cp "$BIN" "$STAGING/usr/local/lib/cy/bin/cy"
+          chmod +x "$STAGING/usr/local/lib/cy/bin/cy"
+
+          cp "$WRAPPER" "$STAGING/usr/local/bin/cy"
+          chmod +x "$STAGING/usr/local/bin/cy"
+
+          cat > "$STAGING/postinstall" << 'POSTINSTALL'
+          #!/bin/bash
+          mkdir -p "$HOME/.local/bin" "$HOME/.local/share/cy/bin"
+          if [ -f "$HOME/.local/share/cy/bin/cy" ]; then chmod +x "$HOME/.local/share/cy/bin/cy"; fi
+          SHELL_RC="$HOME/.zshrc"
+          [ -n "${BASH_VERSION-}" ] && SHELL_RC="$HOME/.bashrc"
+          if ! grep -q '/usr/local/bin' "$SHELL_RC" 2>/dev/null; then
+            echo '' >> "$SHELL_RC"
+            echo '# Added by CY-CLI installer' >> "$SHELL_RC"
+            echo 'export PATH="/usr/local/bin:$PATH"' >> "$SHELL_RC"
+          fi
+          echo "CY-CLI installed! Run: cy --version"
+          POSTINSTALL
+          chmod +x "$STAGING/postinstall"
+
+          pkgbuild --root "$STAGING" --install-location "/" --scripts "$STAGING" \
+            --identifier "com.symbiotyc.cy-cli" --version "$VERSION" \
+            --compression latest "$STAGING/component.pkg"
+
+          productbuild --distribution - --package-path "$STAGING" --version "$VERSION" "$PKG_NAME" << DISTEOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <installer-gui-script minSpecVersion="2">
+            <title>CY-CLI</title>
+            <pkg-ref id="com.symbiotyc.cy-cli" version="$VERSION" auth="Root">component.pkg</pkg-ref>
+            <choice id="default" title="CY-CLI">
+              <pkg-ref id="com.symbiotyc.cy-cli"/>
+            </choice>
+            <options customize="never" require-scripts="true"/>
+          </installer-gui-script>
+          DISTEOF
+
+          echo "Created $PKG_NAME"
+          ls -lh "$PKG_NAME"
+          shasum -a 256 "$PKG_NAME" > "$PKG_NAME.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-apple-darwin
+          path: |
+            cy-x86_64-apple-darwin.dmg
+            cy-x86_64-apple-darwin.dmg.sha256
+            cy-x86_64-apple-darwin.pkg
+            cy-x86_64-apple-darwin.pkg.sha256
+          retention-days: 90
