@@ -4,21 +4,27 @@
 
 ## Установка
 
-### macOS / Linux
+### macOS / Linux (self-updating installer v2)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SYMBIOTYC/cy-cli-releases/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SYMBIOTYC/cy-cli/main/install-v2.sh | bash
 ```
 
-### Windows (PowerShell)
+### Windows (self-updating installer v2)
 
 ```powershell
-irm https://raw.githubusercontent.com/SYMBIOTYC/cy-cli-releases/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/SYMBIOTYC/cy-cli/main/install-v2.ps1 | iex
 ```
 
-## Скачать вручную
+### macOS (.dmg)
 
-См. [Releases](https://github.com/SYMBIOTYC/cy-cli-releases/releases) для скачивания бинарников.
+Скачайте `.dmg` из [Releases](https://github.com/SYMBIOTYC/cy-cli/releases) и перетащите `CY-CLI.app` в `/Applications`.
+
+## Поддерживаемые платформы
+
+- Linux: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`
+- macOS: `x86_64-apple-darwin`, `aarch64-apple-darwin`
+- Windows: `x86_64-pc-windows-msvc`, `aarch64-pc-windows-msvc`
 
 ## Проверка
 

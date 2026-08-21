@@ -19,11 +19,6 @@ jobs:
             runner: ubuntu-latest
             os: linux
             artifact: cy-x86_64-unknown-linux-gnu.tar.gz
-          - target: aarch64-apple-darwin
-            runner: macos-14
-            os: macos
-            artifact: cy-aarch64-apple-darwin.dmg
-            installer: cy-aarch64-apple-darwin.pkg
           - target: x86_64-apple-darwin
             runner: macos-13
             os: macos
@@ -148,7 +143,7 @@ jobs:
             --identifier "com.symbiotyc.cy-cli" --version "$VERSION" \
             --compression latest "$STAGING/component.pkg"
 
-          productbuild --distribution - --package-path "$STAGING" --version "$VERSION" "$PKG_NAME" << 'DISTEOF'
+          productbuild --distribution - --package-path "$STAGING" --version "$VERSION" "$PKG_NAME" << DISTEOF
           <?xml version="1.0" encoding="utf-8"?>
           <installer-gui-script minSpecVersion="2">
             <title>CY-CLI</title>
@@ -190,6 +185,7 @@ jobs:
           WRAPPER="${{ github.workspace }}/tools/cy-wrapper.ps1"
           INSTALLER="${{ matrix.installer }}"
           VERSION="${{ github.event.client_payload.tag }}"
+          VERSION="${VERSION#v}"
 
           mkdir -p "${{ github.workspace }}/bin"
           cp "$BIN" "${{ github.workspace }}/bin/cy.exe"
@@ -207,7 +203,7 @@ jobs:
           cat > installer.iss << ISSEOF
           ; CY-CLI Windows Installer
           #define MyAppName "CY-CLI"
-          #define MyAppVersion "${{ github.event.client_payload.tag }}"
+          #define MyAppVersion "$VERSION"
           #define MyAppPublisher "SYMBIOTYC"
           #define MyAppURL "https://github.com/SYMBIOTYC/cy-cli"
           #define MyAppExeName "cy-wrapper.ps1"
