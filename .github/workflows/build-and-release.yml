@@ -24,11 +24,6 @@ jobs:
             os: macos
             artifact: cy-x86_64-apple-darwin.dmg
             installer: cy-x86_64-apple-darwin.pkg
-          - target: x86_64-pc-windows-msvc
-            runner: windows-latest
-            os: windows
-            artifact: cy-x86_64-pc-windows-msvc.zip
-            installer: CY-CLI-x86_64-setup.exe
 
     steps:
       - name: Checkout private source code
@@ -49,8 +44,7 @@ jobs:
         working-directory: cy-cli-private/.fundament/codex-rs
         run: cargo build --bin cy --release --target ${{ matrix.target }}
 
-      - name: Strip binary (non-Windows)
-        if: matrix.os != 'windows'
+      - name: Strip binary
         run: |
           strip cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy || true
           upx --best --lzma cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy || true
@@ -168,106 +162,6 @@ jobs:
           tar czf ${{ matrix.artifact }} cy
           sha256sum ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
 
-      - name: Package Windows artifact
-        if: matrix.os == 'windows'
-        shell: bash
-        run: |
-          BIN="cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy.exe"
-          cp "$BIN" cy.exe
-          powershell Compress-Archive -Path cy.exe -DestinationPath ${{ matrix.artifact }}
-          powershell -Command "Get-FileHash -Algorithm SHA256 ${{ matrix.artifact }} | Select-Object -ExpandProperty Hash | Out-File -FilePath ${{ matrix.artifact }}.sha256"
-
-      - name: Build Windows .exe installer
-        if: matrix.os == 'windows'
-        shell: bash
-        run: |
-          BIN="cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy.exe"
-          WRAPPER="${{ github.workspace }}/tools/cy-wrapper.ps1"
-          INSTALLER="${{ matrix.installer }}"
-          VERSION="${{ github.event.client_payload.tag }}"
-          VERSION="${VERSION#v}"
-
-          mkdir -p "${{ github.workspace }}/bin"
-          cp "$BIN" "${{ github.workspace }}/bin/cy.exe"
-
-          # Download Inno Setup and compile silently
-          curl -fsSL -o is.exe https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe
-          mkdir -p "C:\Program Files (x86)\Inno Setup"
-          powershell -Command "Start-Process is.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR=C:\Program Files (x86)\Inno Setup' -Wait"
-
-          # Create license.txt
-          echo "CY-CLI is licensed under the Apache License 2.0." > license.txt
-          echo "See https://github.com/SYMBIOTYC/cy-cli/blob/main/LICENSE" >> license.txt
-
-          # Generate Inno Setup script inline
-          cat > installer.iss << ISSEOF
-          ; CY-CLI Windows Installer
-          #define MyAppName "CY-CLI"
-          #define MyAppVersion "$VERSION"
-          #define MyAppPublisher "SYMBIOTYC"
-          #define MyAppURL "https://github.com/SYMBIOTYC/cy-cli"
-          #define MyAppExeName "cy-wrapper.ps1"
-
-          [Setup]
-          AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
-          AppName={#MyAppName}
-          AppVersion={#MyAppVersion}
-          AppVerName={#MyAppName} {#MyAppVersion}
-          AppPublisher={#MyAppPublisher}
-          AppPublisherURL={#MyAppURL}
-          AppSupportURL={#MyAppURL}
-          AppUpdatesURL={#MyAppURL}
-          DefaultDirName={localappdata}\Programs\{#MyAppName}
-          DefaultGroupName={#MyAppName}
-          DisableProgramGroupPage=yes
-          LicenseFile=license.txt
-          OutputDir=.
-          OutputBaseFilename=${{ matrix.installer }}
-          Compression=lzma2
-          SolidCompression=yes
-          WizardStyle=modern
-          ArchitecturesInstallIn64BitMode=x64
-          ArchitecturesAllowed=x64
-
-          [Languages]
-          Name: "english"; MessagesFile: "compiler:Default.isl"
-          Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
-
-          [Files]
-          Source: "bin\cy.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-          Source: "cy-wrapper.ps1"; DestDir: "{app}"; Flags: ignoreversion
-
-          [Icons]
-          Name: "{group}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"
-          Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-          Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"; Comment: "CY-CLI Self-Updating Wrapper"
-          Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"; Tasks: desktopicon
-
-          [Run]
-          Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\cy-wrapper.ps1"" --version"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
-
-          [Registry]
-          Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}'))
-
-          [Code]
-          function NeedsAddPath(Path: string): Boolean;
-          var
-            OldPath: string;
-          begin
-            Result := False;
-            if not RegQueryStringValue(HKCU, 'Environment', 'Path', OldPath) then
-              Exit;
-            Result := Pos(UpperCase(Path), Uppercase(OldPath)) = 0;
-          end;
-          ISSEOF
-
-          # Compile installer
-          "C:\Program Files (x86)\Inno Setup\ISCC.exe" installer.iss
-
-          echo "Created $INSTALLER"
-          ls -lh "$INSTALLER"
-          powershell -Command "Get-FileHash -Algorithm SHA256 $INSTALLER | Select-Object -ExpandProperty Hash | Out-File -FilePath $INSTALLER.sha256"
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -275,8 +169,8 @@ jobs:
           path: |
             ${{ matrix.artifact }}
             ${{ matrix.artifact }}.sha256
-            ${{ matrix.installer || '' }}
-            ${{ matrix.installer || '' }}.sha256
+            ${{ matrix.installer }}
+            ${{ matrix.installer }}.sha256
           retention-days: 90
 
   release:
