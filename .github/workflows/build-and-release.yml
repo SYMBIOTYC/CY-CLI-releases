@@ -20,7 +20,7 @@ jobs:
             os: linux
             artifact: cy-x86_64-unknown-linux-gnu.tar.gz
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-14
             os: macos
             artifact: cy-x86_64-apple-darwin.dmg
             installer: cy-x86_64-apple-darwin.pkg
@@ -44,6 +44,10 @@ jobs:
         with:
           targets: ${{ matrix.target }}
           cache: true
+
+      - name: Ensure macOS target is installed
+        if: matrix.os == 'macos'
+        run: rustup target add ${{ matrix.target }}
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
