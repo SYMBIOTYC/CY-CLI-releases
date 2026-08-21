@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Build Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Checkout private source code
         uses: actions/checkout@v4
