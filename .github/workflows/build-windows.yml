@@ -41,11 +41,12 @@ jobs:
           cargo update -p mio --precise 1.2.0
           cargo tree -p mio
 
-      - name: Patch mio for Windows
-        working-directory: cy-cli-private/.fundament/codex-rs
+      - name: Patch recursion limit for Windows
+        shell: bash
         run: |
-          cargo update -p mio --precise 1.2.0
-          cargo tree -p mio
+          find cy-cli-private/.fundament/codex-rs -name "lib.rs" -path "*/exec/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
+          find cy-cli-private/.fundament/codex-rs -name "lib.rs" -path "*/tui/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
+          echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
