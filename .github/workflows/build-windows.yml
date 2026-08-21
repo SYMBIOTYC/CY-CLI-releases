@@ -31,7 +31,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.70.0
+          toolchain: 1.60.0
           targets: x86_64-pc-windows-msvc
           cache: true
 
