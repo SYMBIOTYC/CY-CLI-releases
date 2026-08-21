@@ -28,21 +28,22 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
-      - name: Override rust-toolchain.toml
+      - name: Patch recursion limit for Windows
         shell: bash
-        run: rm -f cy-cli-private/.fundament/codex-rs/rust-toolchain.toml
+        run: |
+          find cy-cli-private/.fundament/codex-rs -name "lib.rs" -path "*/exec/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
+          find cy-cli-private/.fundament/codex-rs -name "lib.rs" -path "*/tui/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: nightly-2024-01-01
           targets: x86_64-pc-windows-msvc
-          cache: false
+          cache: true
 
       - name: Patch mio for Windows
         working-directory: cy-cli-private/.fundament/codex-rs
         run: |
-          cargo update -p mio --precise 1.2.0
+          cargo update -p mio
           cargo tree -p mio
 
       - name: Patch recursion limit for Windows
@@ -50,7 +51,6 @@ jobs:
         run: |
           find cy-cli-private/.fundament/codex-rs -name "lib.rs" -path "*/exec/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
           find cy-cli-private/.fundament/codex-rs -name "lib.rs" -path "*/tui/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
-          echo "RUSTFLAGS=-Z recursion-limit=256" >> $GITHUB_ENV
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
