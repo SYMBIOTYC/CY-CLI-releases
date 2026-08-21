@@ -3,6 +3,16 @@ name: Build and Release cy-cli
 on:
   repository_dispatch:
     types: [release-build]
+  workflow_dispatch:
+    inputs:
+      private_repo:
+        description: 'Private source repository (org/name)'
+        required: true
+        default: 'SYMBIOTYC/cy-cli'
+      tag:
+        description: 'Git tag or branch to build'
+        required: true
+        default: 'v0.1.5'
 
 permissions:
   contents: write
@@ -34,8 +44,8 @@ jobs:
       - name: Checkout private source code
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.client_payload.private_repo }}
-          ref: ${{ github.event.client_payload.tag }}
+          repository: ${{ github.event.inputs.private_repo || github.event.client_payload.private_repo }}
+          ref: ${{ github.event.inputs.tag || github.event.inputs.tag || github.event.client_payload.tag }}
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
@@ -113,7 +123,7 @@ jobs:
         run: |
           BIN="cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy"
           WRAPPER="${{ github.workspace }}/tools/cy-wrapper.sh"
-          VERSION="${{ github.event.client_payload.tag }}"
+          VERSION="${{ github.event.inputs.tag || github.event.client_payload.tag }}"
           VERSION="${VERSION#v}"
           PKG_NAME="${{ matrix.installer }}"
 
@@ -191,7 +201,7 @@ jobs:
           BIN="cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy.exe"
           WRAPPER="${{ github.workspace }}/tools/cy-wrapper.ps1"
           INSTALLER="${{ matrix.installer }}"
-          VERSION="${{ github.event.client_payload.tag }}"
+          VERSION="${{ github.event.inputs.tag || github.event.client_payload.tag }}"
           VERSION="${VERSION#v}"
 
           mkdir -p "${{ github.workspace }}/bin"
@@ -313,8 +323,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ github.event.client_payload.tag }}
-          name: ${{ github.event.client_payload.tag }}
+          tag_name: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+          name: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
           generate_release_notes: true
           files: |
             release-assets/*
