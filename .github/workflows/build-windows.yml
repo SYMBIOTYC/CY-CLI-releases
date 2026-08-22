@@ -76,7 +76,7 @@ jobs:
           mkdir -p "${{ github.workspace }}/bin"
           cp "$BIN" "${{ github.workspace }}/bin/cy.exe"
 
-          curl -fsSL -o is.exe https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe
+          curl -fsSL -o is.exe https://github.com/jrsoftware/issrc/releases/download/v6.2.3/innosetup-6.2.3.exe
           mkdir -p "C:\Program Files (x86)\Inno Setup"
           powershell -Command "Start-Process is.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR=C:\Program Files (x86)\Inno Setup' -Wait"
 
