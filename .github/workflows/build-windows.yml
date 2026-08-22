@@ -55,7 +55,7 @@ jobs:
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
         run: cargo build --bin cy --release --target x86_64-pc-windows-msvc
-        timeout-minutes: 60
+        timeout-minutes: 120
 
       - name: Package Windows artifact
         shell: bash
