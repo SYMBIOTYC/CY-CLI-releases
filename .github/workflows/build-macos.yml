@@ -31,6 +31,11 @@ jobs:
             app_name: CY-CLI-intel.app
 
     steps:
+      - name: Checkout release repo for icon
+        uses: actions/checkout@v4
+        with:
+          path: .
+
       - name: Checkout private source code
         uses: actions/checkout@v4
         with:
