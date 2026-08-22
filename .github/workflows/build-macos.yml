@@ -17,8 +17,19 @@ permissions:
 
 jobs:
   build:
-    name: Build macOS
+    name: Build macOS ${{ matrix.target }}
     runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            artifact: cy-aarch64-apple-darwin.dmg
+            app_name: CY-CLI-arm64.app
+          - target: x86_64-apple-darwin
+            artifact: cy-x86_64-apple-darwin.dmg
+            app_name: CY-CLI-intel.app
+
     steps:
       - name: Checkout private source code
         uses: actions/checkout@v4
@@ -31,7 +42,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.target }}
           cache: true
 
       - name: Install rust-src
@@ -39,13 +50,13 @@ jobs:
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
-        run: cargo build --bin cy --release --target aarch64-apple-darwin
+        run: cargo build --bin cy --release --target ${{ matrix.target }}
 
       - name: Package macOS .dmg
         run: |
-          BIN="cy-cli-private/.fundament/codex-rs/target/aarch64-apple-darwin/release/cy"
-          APP_NAME="CY-CLI.app"
-          DMG_NAME="cy-aarch64-apple-darwin.dmg"
+          BIN="cy-cli-private/.fundament/codex-rs/target/${{ matrix.target }}/release/cy"
+          APP_NAME="${{ matrix.app_name }}"
+          DMG_NAME="${{ matrix.artifact }}"
 
           mkdir -p "$APP_NAME/Contents/MacOS"
           mkdir -p "$APP_NAME/Contents/Resources"
@@ -89,6 +100,6 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cy-aarch64-apple-darwin-dmg
-          path: cy-aarch64-apple-darwin.dmg
+          name: ${{ matrix.target }}-dmg
+          path: ${{ matrix.artifact }}
           retention-days: 90
