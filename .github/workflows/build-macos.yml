@@ -73,6 +73,8 @@ jobs:
           cp "$BIN" "$APP_NAME/Contents/MacOS/cy"
           chmod +x "$APP_NAME/Contents/MacOS/cy"
 
+          cp icon.icns "$APP_NAME/Contents/Resources/icon.icns"
+
           cat > "$APP_NAME/Contents/Info.plist" << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,7 +95,7 @@ jobs:
             <key>CFBundleSignature</key>
             <string>????</string>
             <key>CFBundleIconFile</key>
-            <string>icon</string>
+            <string>icon.icns</string>
             <key>LSMinimumSystemVersion</key>
             <string>13.0</string>
             <key>NSHighResolutionCapable</key>
