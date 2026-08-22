@@ -54,6 +54,8 @@ jobs:
           rustup component add rust-std --target aarch64-apple-darwin
           rustup component add rust-std --target x86_64-apple-darwin
           rustup component add rust-src
+          ls -la ~/.rustup/toolchains/stable-x86_64-apple-darwin/lib/ 2>/dev/null || echo "x86_64 std not found"
+          ls -la ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/ 2>/dev/null || echo "aarch64 std not found"
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
