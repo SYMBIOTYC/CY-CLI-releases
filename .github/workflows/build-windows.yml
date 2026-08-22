@@ -78,8 +78,8 @@ jobs:
           cp "$BIN" "${{ github.workspace }}/bin/cy.exe"
 
           curl -fsSL -o is.exe https://github.com/jrsoftware/issrc/releases/download/is-6_2_2/innosetup-6.2.2.exe
-          mkdir -p "C:\Program Files (x86)\Inno Setup"
-          powershell -Command "Start-Process is.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR=""C:\Program Files (x86)\Inno Setup""' -Wait"
+          mkdir -p "C:\\Program Files (x86)\\Inno Setup"
+          ./is.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="C:\\Program Files (x86)\\Inno Setup"
 
           echo "CY-CLI is licensed under the Apache License 2.0." > license.txt
           echo "See https://github.com/SYMBIOTYC/CY-CLI-releases/blob/main/LICENSE" >> license.txt
