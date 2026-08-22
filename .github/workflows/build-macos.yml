@@ -39,21 +39,21 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.95.0
-          cache: true
+      - name: Remove repo rust-toolchain override
+        shell: bash
+        run: rm -f cy-cli-private/.fundament/codex-rs/rust-toolchain.toml
 
-      - name: Add Apple targets and std
+      - name: Install Rust via rustup
         shell: bash
         run: |
-          rustup target add --toolchain 1.95.0 aarch64-apple-darwin x86_64-apple-darwin
-          rustup component add --toolchain 1.95.0 rust-std --target aarch64-apple-darwin
-          rustup component add --toolchain 1.95.0 rust-std --target x86_64-apple-darwin
-          rustup component add --toolchain 1.95.0 rust-src
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.95.0
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          rustup component add rust-std --target aarch64-apple-darwin
+          rustup component add rust-std --target x86_64-apple-darwin
+          rustup component add rust-src
           echo "=== Target list ==="
-          rustup target list --toolchain 1.95.0 --installed
+          rustup target list --installed
           echo "=== x86_64 rustc check ==="
           rustup run 1.95.0 x86_64-apple-darwin rustc --version || echo "x86_64 rustc failed"
 
