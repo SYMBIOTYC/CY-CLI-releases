@@ -42,16 +42,18 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          targets: |
+            aarch64-apple-darwin
+            x86_64-apple-darwin
           cache: true
 
-      - name: Add Apple targets
+      - name: Add Apple targets and std
+        shell: bash
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           rustup component add rust-std --target aarch64-apple-darwin
           rustup component add rust-std --target x86_64-apple-darwin
-
-      - name: Install rust-src
-        run: rustup component add rust-src
+          rustup component add rust-src
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/codex-rs
