@@ -58,7 +58,6 @@ jobs:
       - name: Checkout release repo assets
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
           path: release-repo
 
       - name: Patch recursion limit for Windows
@@ -70,6 +69,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.95.0
           targets: x86_64-pc-windows-msvc
           cache: true
 
@@ -117,6 +117,15 @@ jobs:
             CY-CLI-x86_64-setup.exe
             CY-CLI-x86_64-setup.exe.sha256
           retention-days: 90
+
+      - name: Verify artifacts exist
+        shell: bash
+        run: |
+          test -f cy-x86_64-pc-windows-msvc.zip || { echo "FAIL: zip missing"; exit 1; }
+          test -f cy-x86_64-pc-windows-msvc.zip.sha256 || { echo "FAIL: zip sha256 missing"; exit 1; }
+          test -f CY-CLI-x86_64-setup.exe || { echo "FAIL: installer missing"; exit 1; }
+          test -f CY-CLI-x86_64-setup.exe.sha256 || { echo "FAIL: installer sha256 missing"; exit 1; }
+          ls -lh cy-x86_64-pc-windows-msvc.zip CY-CLI-x86_64-setup.exe
 
       - name: Upload to GitHub Release
         if: always()
