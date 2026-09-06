@@ -144,7 +144,11 @@ jobs:
           cp "$BIN" "$APP_NAME/Contents/MacOS/cy"
           chmod +x "$APP_NAME/Contents/MacOS/cy"
 
-          cp icon.icns "$APP_NAME/Contents/Resources/icon.icns"
+          if [ -f "icon.icns" ]; then
+            cp icon.icns "$APP_NAME/Contents/Resources/icon.icns"
+          else
+            echo "WARN: icon.icns not found in release repo; skipping app icon"
+          fi
 
           # The launcher opens Terminal.app running the bundled cy CLI inside a
           # real TTY (so the TUI works). The bridge converts the CLI's
@@ -159,7 +163,11 @@ jobs:
           # them into ~/.cy/themes/ on first run so `/theme` shows them with a
           # ★ prefix and the picker defaults to `cy-prime` on dark terminals.
           mkdir -p "$APP_NAME/Contents/Resources/themes"
-          cp packaging/themes/*.tmTheme "$APP_NAME/Contents/Resources/themes/"
+          if compgen -G "packaging/themes/*.tmTheme" > /dev/null; then
+            cp packaging/themes/*.tmTheme "$APP_NAME/Contents/Resources/themes/"
+          else
+            echo "WARN: no .tmTheme files found in packaging/themes/; skipping themes"
+          fi
           echo "== Bundled themes =="
           ls "$APP_NAME/Contents/Resources/themes"
 

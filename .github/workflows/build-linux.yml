@@ -45,6 +45,10 @@ jobs:
           targets: ${{ matrix.target }}
           cache: true
 
+      - name: Install packaging tools
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y upx
+
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs
         run: cargo build --bin cy --release --target ${{ matrix.target }}

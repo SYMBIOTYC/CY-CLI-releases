@@ -18,8 +18,33 @@ permissions:
   contents: write
 
 jobs:
+  ensure-release:
+    name: Ensure GitHub release exists
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release repo (so `gh` has a working directory)
+        uses: actions/checkout@v4
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+        run: |
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if ! gh release view "$TAG" >/dev/null 2>&1; then
+              echo "Creating draft release $TAG"
+              gh release create "$TAG" --draft \
+                --title "CY-CLI $TAG" \
+                --notes "Auto-generated draft. Changelog will be edited manually before publishing."
+            else
+              echo "Release $TAG already exists; skipping create"
+            fi
+          else
+            echo "Tag $TAG is not a semver release; skipping release create"
+          fi
+
   build:
     name: Build Windows
+    needs: ensure-release
     runs-on: windows-2022
     steps:
       - name: Checkout private source code
@@ -33,6 +58,7 @@ jobs:
       - name: Checkout release repo assets
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
           path: release-repo
 
       - name: Patch recursion limit for Windows
@@ -53,12 +79,6 @@ jobs:
           cargo update -p mio
           cargo tree -p mio
 
-      - name: Patch recursion limit for Windows
-        shell: bash
-        run: |
-          find cy-cli-private/.fundament/cx-rs -name "lib.rs" -path "*/exec/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
-          find cy-cli-private/.fundament/cx-rs -name "lib.rs" -path "*/tui/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
-
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs
         run: cargo build --bin cy --release --target x86_64-pc-windows-msvc
@@ -70,7 +90,7 @@ jobs:
           BIN="cy-cli-private/.fundament/cx-rs/target/x86_64-pc-windows-msvc/release/cy.exe"
           cp "$BIN" cy.exe
           powershell Compress-Archive -Path cy.exe -DestinationPath cy-x86_64-pc-windows-msvc.zip
-          powershell -Command "Get-FileHash -Algorithm SHA256 cy-x86_64-pc-windows-msvc.zip | Select-Object -ExpandProperty Hash | Out-File -FilePath cy-x86_64-pc-windows-msvc.zip.sha256"
+          powershell -Command "Get-FileHash -Algorithm SHA256 cy-x86_64-pc-windows-msvc.zip | Select-Object -ExpandProperty Hash | Set-Content -Encoding ASCII -NoNewline -Path cy-x86_64-pc-windows-msvc.zip.sha256"
 
       - name: Build Windows .exe installer
         shell: powershell
