@@ -1,7 +1,7 @@
 # cy_bridge.py
 
 Local Python bridge for the CY-CLI macOS .app. It sits between the bundled
-`cy` binary (which speaks the OpenAI **Responses** API on
+`cy` binary (which speaks the CY **Responses** API on
 `http://127.0.0.1:8790/v1`) and the CY server
 (`https://cy.symbiotyc.workers.dev/v1`, which only exposes the **Chat
 Completions** API).
@@ -61,7 +61,7 @@ pass the same sandbox check. If the model asks to `rm -rf /` or
 | `CY_BRIDGE_LOG`       | `INFO`                                     | `DEBUG`/`INFO`/`WARNING`/`ERROR`.      |
 
 The API key is resolved, in order, from `CY_API_KEY`, then
-`$CY_HOME/auth.json` (fields: `openai_api_key`, `OPENAI_API_KEY`,
+`$CY_HOME/auth.json` (fields: `cy_api_key`,
 `api_key`, `API_KEY`), then the `Authorization` header sent by the CLI.
 
 ## Running standalone
