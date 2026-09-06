@@ -9,10 +9,10 @@ on:
         description: 'Private source repository (org/name)'
         required: true
         default: 'SYMBIOTYC/cy-cli'
-       tag:
-         description: 'Git tag or branch to build'
-         required: true
-         default: 'v0.3.4'
+      tag:
+        description: 'Git tag or branch to build'
+        required: true
+        default: 'v0.3.4'
 
 permissions:
   contents: write
