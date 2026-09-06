@@ -67,11 +67,15 @@ jobs:
           find cy-cli-private/.fundament/cx-rs -name "lib.rs" -path "*/tui/*" -exec sed -i '1i #![recursion_limit = "256"]' {} +
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.96.0
           targets: x86_64-pc-windows-msvc
-          cache: true
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cy-cli-private/.fundament/cx-rs -> target
 
       - name: Patch mio for Windows
         working-directory: cy-cli-private/.fundament/cx-rs

@@ -29,9 +29,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
         run: |
-          # If tag looks like a plain semver (e.g. v0.2.7) and the release is
-          # missing, create it as a draft so the build jobs can attach DMGs.
-          # Branch refs (cy-v0.2.7) are not promoted to a release.
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             if ! gh release view "$TAG" >/dev/null 2>&1; then
               echo "Creating draft release $TAG"
@@ -99,22 +96,20 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.96.0
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
-          rustup component add rust-std --target aarch64-apple-darwin
-          rustup component add rust-std --target x86_64-apple-darwin
           rustup component add rust-src
           echo "=== Target list ==="
           rustup target list --installed
-          echo "=== x86_64 rustc check ==="
-          rustup run 1.95.0 x86_64-apple-darwin rustc --version || echo "x86_64 rustc failed"
+          echo "=== rustc check ==="
+          rustc --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cy-cli-private/.fundament/cx-rs -> target
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs
         run: |
-          # Cargo's incremental cache can serve a stale binary when branding
-          # or version strings change. Detect changes to files that contain
-          # the version literal or any "oi CX"/"Codex" branding and `cargo
-          # clean` the affected crate before rebuilding. This avoids the
-          # post-build patching step that we used to do by hand.
           BRANDING_FILES=$(find . \
             -path '*/target' -prune -o \
             -type f \( -name 'Cargo.toml' -o -name 'card.rs' -o -name 'tooltips.txt' -o -name 'session.rs' -o -name 'event_processor*.rs' \) -print)
@@ -152,18 +147,10 @@ jobs:
             echo "WARN: icon.icns not found in release repo; skipping app icon"
           fi
 
-          # The launcher opens Terminal.app running the bundled cy CLI inside a
-          # real TTY (so the TUI works). The bridge converts the CLI's
-          # /v1/responses calls to the CY server's /v1/chat/completions API.
-          # CFBundleExecutable points at `launcher` so double-clicking the .app
-          # opens a terminal instead of running the raw binary with no TTY.
           cp packaging/macos/launcher "$APP_NAME/Contents/MacOS/launcher"
           chmod +x "$APP_NAME/Contents/MacOS/launcher"
           cp packaging/macos/cy_bridge.py "$APP_NAME/Contents/Resources/cy_bridge.py"
 
-          # Bundle the 7 SYMBIOTYC-branded syntax themes. The launcher copies
-          # them into ~/.cy/themes/ on first run so `/theme` shows them with a
-          # ★ prefix and the picker defaults to `cy-prime` on dark terminals.
           mkdir -p "$APP_NAME/Contents/Resources/themes"
           if compgen -G "packaging/themes/*.tmTheme" > /dev/null; then
             cp packaging/themes/*.tmTheme "$APP_NAME/Contents/Resources/themes/"
@@ -246,7 +233,6 @@ jobs:
           TAG: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
         run: |
           BIN="cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy"
-          # Verify cy_bridge.py and launcher made it into the .app.
           APP="CY-CLI-${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'intel' }}.app"
           echo "== PWD =="
           pwd
@@ -265,13 +251,10 @@ jobs:
             test -f "$APP/Contents/Resources/themes/$t" || { echo "FAIL: theme $t missing"; exit 1; }
           done
           chmod +x "$APP/Contents/MacOS/launcher" "$APP/Contents/MacOS/cy"
-          # Dump strings once to a temp file so the broken-pipe dance between
-          # `strings | grep -q` does not trip the runner's `set -o pipefail`.
           STRINGS_FILE="$(mktemp -t cystrings.XXXXXX)"
           strings "$BIN" > "$STRINGS_FILE" 2>/dev/null || true
           ls -lh "$STRINGS_FILE"
           echo "== Branding check (must be empty) =="
-          # All of these should produce zero hits in a clean build.
           for needle in 'oi CX' 'Codex CLI' 'chatgpt.com/cx?app-landing-page=true' 'CY-CLI 0.0.0'; do
             if grep -q -F "$needle" "$STRINGS_FILE"; then
               echo "WARN: branding leak in binary: $needle"
@@ -281,11 +264,6 @@ jobs:
               echo "WARN: branding leak in cy_bridge.py: $needle"
             fi
           done
-          # Version literal must match the current release tag (workspace version).
-          # CX_CLI_VERSION = env!("CARGO_PKG_VERSION") = "$TAG" (sans leading 'v').
-          # We anchor on the binary's version-string pattern "Cli<semver>" so a
-          # third-party crate (e.g. fax-0.2.6, unicode-xid-0.2.6) cannot trip
-          # the check.
           EXPECTED_VERSION="${TAG#v}"
           PREVIOUS_VERSION="$(echo "$EXPECTED_VERSION" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3-1 }')"
           if ! grep -q -F "Cli${EXPECTED_VERSION}" "$STRINGS_FILE"; then

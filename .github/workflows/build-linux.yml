@@ -40,11 +40,15 @@ jobs:
           path: cy-cli-private
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.96.0
           targets: ${{ matrix.target }}
-          cache: true
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cy-cli-private/.fundament/cx-rs -> target
 
       - name: Install packaging tools
         shell: bash
