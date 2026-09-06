@@ -64,7 +64,6 @@ jobs:
       - name: Package Linux artifact
         if: always()
         continue-on-error: true
-        if: matrix.os == 'linux'
         shell: bash
         run: |
           BIN="cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy"
