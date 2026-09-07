@@ -113,8 +113,24 @@ jobs:
         run: |
           rm -f Cargo.lock
           cargo generate-lockfile 2>&1 || echo "lockfile generation continued"
-          echo "=== rama versions in lock ==="
-          grep -A1 'name = "rama-http"' Cargo.lock || true
+          cargo fetch 2>&1 || echo "fetch continued"
+
+      - name: Patch rama-http Box<str> bug in source cache
+        shell: bash
+        run: |
+          RAMA_DIR=$(find ~/.cargo/registry/src -type d -name "rama-http-0.3.0-alpha.4" 2>/dev/null | head -1)
+          if [ -n "$RAMA_DIR" ] && [ -f "$RAMA_DIR/src/layer/har/spec.rs" ]; then
+            sed -i '' 's/Self::Unknown(format!("{other:?}"))/Self::Unknown(format!("{other:?}").into())/g' "$RAMA_DIR/src/layer/har/spec.rs"
+            echo "Patched $RAMA_DIR/src/layer/har/spec.rs"
+          else
+            echo "rama-http source not found, searching all rama-http dirs..."
+            find ~/.cargo/registry/src -type f -name "spec.rs" -path "*/rama-http*" 2>/dev/null | while read f; do
+              if grep -q 'Self::Unknown(format!("{other:?}"))' "$f" 2>/dev/null; then
+                sed -i '' 's/Self::Unknown(format!("{other:?}"))/Self::Unknown(format!("{other:?}").into())/g' "$f"
+                echo "Patched $f"
+              fi
+            done
+          fi
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs

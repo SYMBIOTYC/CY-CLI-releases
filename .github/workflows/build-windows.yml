@@ -83,6 +83,19 @@ jobs:
           cargo update -p mio
           cargo tree -p mio
 
+      - name: Patch rama-http Box<str> bug
+        shell: bash
+        working-directory: cy-cli-private/.fundament/cx-rs
+        run: |
+          cargo fetch 2>&1 || echo "fetch continued"
+          RAMA_DIR=$(find ~/.cargo/registry/src -type d -name "rama-http-0.3.0-alpha.4" 2>/dev/null | head -1)
+          if [ -n "$RAMA_DIR" ] && [ -f "$RAMA_DIR/src/layer/har/spec.rs" ]; then
+            sed -i 's/Self::Unknown(format!("{other:?}"))/Self::Unknown(format!("{other:?}").into())/g' "$RAMA_DIR/src/layer/har/spec.rs"
+            echo "Patched $RAMA_DIR/src/layer/har/spec.rs"
+          else
+            echo "rama-http source not found"
+          fi
+
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs
         run: cargo build --bin cy --release --target x86_64-pc-windows-msvc
