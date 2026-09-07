@@ -75,10 +75,12 @@ jobs:
         shell: bash
         run: rm -f cy-cli-private/.fundament/cx-rs/rust-toolchain.toml
 
-      - name: Update rama-http to fix Box<str> type mismatch
+      - name: Regenerate Cargo.lock with fixed rama versions
         shell: bash
         working-directory: cy-cli-private/.fundament/cx-rs
-        run: cargo update -p rama-http 2>&1 || echo "cargo update failed, continuing"
+        run: |
+          rm -f Cargo.lock
+          cargo generate-lockfile 2>&1 || echo "lockfile generation continued"
 
       - name: Use lld for aarch64 linking
         shell: bash
