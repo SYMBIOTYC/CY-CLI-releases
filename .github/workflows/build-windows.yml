@@ -101,6 +101,17 @@ jobs:
             echo "rama-http source not found"
           fi
 
+      - name: Patch cx-api tungstenite imports
+        shell: bash
+        working-directory: cy-cli-private/.fundament/cx-rs
+        run: |
+          for f in cx-api/src/endpoint/realtime_websocket/methods.rs cx-api/src/endpoint/responses_websocket.rs; do
+            if [ -f "$f" ]; then
+              sed -i 's/use tungstenite::/use tokio_tungstenite::tungstenite::/g' "$f"
+              echo "Patched $f"
+            fi
+          done
+
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs
         run: cargo build --bin cy --release --target x86_64-pc-windows-msvc
