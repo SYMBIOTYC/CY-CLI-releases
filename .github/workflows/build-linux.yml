@@ -57,7 +57,9 @@ jobs:
       - name: Fetch dependencies
         shell: bash
         working-directory: cy-cli-private/.fundament/cx-rs
-        run: cargo fetch 2>&1 || echo "fetch continued"
+        run: |
+          cargo generate-lockfile 2>&1 || echo "lockfile generated"
+          cargo fetch 2>&1 || echo "fetch continued"
 
       - name: Patch rama-http Box<str> bug
         shell: bash
