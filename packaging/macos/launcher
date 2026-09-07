@@ -32,7 +32,7 @@ import json, sys
 try:
     with open('$AUTH_FILE') as f:
         data = json.load(f)
-    v = data.get('openai_api_key', '')
+    v = data.get('CY_API_KEY') or data.get('openai_api_key') or data.get('OPENAI_API_KEY') or data.get('api_key') or ''
     print(v if isinstance(v, str) else '')
 except Exception:
     print('')
@@ -160,14 +160,22 @@ export CX_HOME="$CY_HOME"
 export CODEX_HOME="$CY_HOME"
 export CY_API_KEY="$KEY"
 
-# AppleScript "do script" runs the command in a new Terminal tab. We hide
-# the shell prompt while the splash + cy start so the user only sees the
-# pink CY art (not zsh's "Last login:" banner or its default PS1). After
-# the cy TUI exits we restore the user's original prompt and clear the
-# splash file.
-osascript >/dev/null 2>&1 <<APPLESCRIPT
-tell application "Terminal"
-    activate
-    do script "export CX_HOME='$CY_HOME' CODEX_HOME='$CY_HOME' CY_API_KEY='$KEY'; export PS1='$ '; export PROMPT_EOL=''; clear; cat '$SPLASH_FILE'; cd '$HOME' && '$CY_BIN'; rm -f '$SPLASH_FILE'"
-end tell
-APPLESCRIPT
+# Write a .command file that Terminal can execute directly.
+# This avoids the need for AppleScript Automation permissions.
+CMD_FILE="$CY_HOME/.cy_launch.command"
+cat > "$CMD_FILE" <<CMD_EOF
+#!/bin/bash
+export CX_HOME='$CY_HOME'
+export CODEX_HOME='$CY_HOME'
+export CY_API_KEY='$KEY'
+export PS1='\\$ '
+export PROMPT_EOL=''
+clear
+cat '$SPLASH_FILE'
+cd '$HOME' && '$CY_BIN'
+rm -f '$SPLASH_FILE'
+rm -f '$CMD_FILE'
+CMD_EOF
+chmod +x "$CMD_FILE"
+
+open -a Terminal "$CMD_FILE"

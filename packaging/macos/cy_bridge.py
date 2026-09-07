@@ -217,7 +217,7 @@ def _read_auth_file_key():
             data = json.load(fh)
     except Exception:
         return ""
-    for field in ("openai_api_key", "OPENAI_API_KEY", "api_key", "API_KEY"):
+    for field in ("CY_API_KEY", "openai_api_key", "OPENAI_API_KEY", "api_key", "API_KEY"):
         val = data.get(field)
         if isinstance(val, str) and val.strip():
             return val.strip()
@@ -531,7 +531,7 @@ _UPSTREAM_BACKOFF = (0.5, 1.0, 2.0)
 _RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
 
 
-def _post_chat(model, messages, tools=None):
+def _post_chat(model, messages, tools=None, api_key=None):
     """POST a chat completion to the upstream. Retries transient errors.
 
     Returns parsed JSON on success, raises the last exception on terminal
@@ -545,6 +545,8 @@ def _post_chat(model, messages, tools=None):
         "Content-Type": "application/json",
         "User-Agent": "cy-bridge/2.1",
     }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     last_err = None
     for attempt in range(1, _UPSTREAM_ATTEMPTS + 1):
@@ -728,7 +730,7 @@ class H(http.server.BaseHTTPRequestHandler):
 
         try:
             for round_idx in range(max_tool_rounds):
-                chat_resp = _post_chat(model, messages, tools=TOOLS)
+                chat_resp = _post_chat(model, messages, tools=TOOLS, api_key=api_key)
                 assistant = _extract_assistant(chat_resp)
                 tool_calls = assistant["tool_calls"]
                 text = assistant["text"]
