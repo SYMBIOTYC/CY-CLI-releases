@@ -81,6 +81,8 @@ jobs:
         run: |
           rm -f Cargo.lock
           cargo generate-lockfile 2>&1 || echo "lockfile generation continued"
+          echo "=== rama versions in lock ==="
+          grep -A1 'name = "rama-http"' Cargo.lock || true
 
       - name: Use lld for aarch64 linking
         shell: bash
