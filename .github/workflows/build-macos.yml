@@ -107,6 +107,14 @@ jobs:
         with:
           workspaces: cy-cli-private/.fundament/cx-rs -> target
 
+      - name: Patch Cargo.toml for tungstenite unification
+        shell: bash
+        working-directory: cy-cli-private/.fundament/cx-rs
+        run: |
+          sed -i '' 's|tungstenite = { git = "https://github.com/SYMBIOTYC/tungstenite-rs", rev = "[^"]*" }|tungstenite = { git = "https://github.com/SYMBIOTYC/tungstenite-rs", branch = "main" }|g' Cargo.toml
+          sed -i '' 's|tungstenite = { git = "https://github.com/SYMBIOTYC/tungstenite-rs", rev = "[^"]*" }|tungstenite = { git = "https://github.com/SYMBIOTYC/tungstenite-rs", branch = "main" }|g' Cargo.toml
+          echo "Unified tungstenite patch in Cargo.toml"
+
       - name: Fetch dependencies
         shell: bash
         working-directory: cy-cli-private/.fundament/cx-rs
@@ -135,9 +143,10 @@ jobs:
         shell: bash
         working-directory: cy-cli-private/.fundament/cx-rs
         run: |
-          for f in cx-api/src/endpoint/realtime_websocket/methods.rs cx-api/src/endpoint/responses_websocket.rs; do
+          for f in cx-api/src/endpoint/realtime_websocket/methods.rs; do
             if [ -f "$f" ]; then
-              sed -i '' 's/use tungstenite::/use tokio_tungstenite::tungstenite::/g' "$f"
+              sed -i '' 's/use tungstenite::protocol::WebSocketConfig;/use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;/' "$f"
+              sed -i '' 's/use tungstenite::protocol::frame::coding::CloseCode;/use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;/' "$f"
               echo "Patched $f"
             fi
           done
