@@ -75,15 +75,6 @@ jobs:
         shell: bash
         run: rm -f cy-cli-private/.fundament/cx-rs/rust-toolchain.toml
 
-      - name: Regenerate Cargo.lock with fixed rama versions
-        shell: bash
-        working-directory: cy-cli-private/.fundament/cx-rs
-        run: |
-          rm -f Cargo.lock
-          cargo generate-lockfile 2>&1 || echo "lockfile generation continued"
-          echo "=== rama versions in lock ==="
-          grep -A1 'name = "rama-http"' Cargo.lock || true
-
       - name: Use lld for aarch64 linking
         shell: bash
         run: |
@@ -115,6 +106,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: cy-cli-private/.fundament/cx-rs -> target
+
+      - name: Regenerate Cargo.lock with fixed rama versions
+        shell: bash
+        working-directory: cy-cli-private/.fundament/cx-rs
+        run: |
+          rm -f Cargo.lock
+          cargo generate-lockfile 2>&1 || echo "lockfile generation continued"
+          echo "=== rama versions in lock ==="
+          grep -A1 'name = "rama-http"' Cargo.lock || true
 
       - name: Build release binary
         working-directory: cy-cli-private/.fundament/cx-rs
