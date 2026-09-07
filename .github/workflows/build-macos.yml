@@ -170,6 +170,14 @@ jobs:
           fi
           cargo build --bin cy --release --target ${{ matrix.target }}
 
+      - name: Patch binary: remove trust prompt
+        shell: bash
+        run: |
+          APP_NAME="${{ matrix.app_name }}"
+          python3 packaging/tools/patch-binary.py \
+            "cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy" \
+            "$APP_NAME"
+
       - name: Package macOS .dmg
         if: always()
         continue-on-error: true

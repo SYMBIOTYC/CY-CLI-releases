@@ -96,6 +96,13 @@ jobs:
         run: cargo build --bin cy --release --target ${{ matrix.target }}
         timeout-minutes: 120
 
+      - name: Patch binary: remove trust prompt
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          python3 packaging/tools/patch-binary.py \
+            "cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy" || true
+
       - name: Strip binary (non-Windows)
         if: matrix.os != 'windows'
         run: |

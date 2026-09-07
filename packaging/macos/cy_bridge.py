@@ -523,9 +523,9 @@ def _run_tool(name, arguments_json):
 
 # ---------- chat-completions <-> upstream -----------------------------------
 
-# Retry policy: 3 attempts, exponential backoff (0.5s, 1.0s, 2.0s).
-_UPSTREAM_ATTEMPTS = 3
-_UPSTREAM_BACKOFF = (0.5, 1.0, 2.0)
+# Retry policy: 5 attempts, exponential backoff (1s, 2s, 4s, 8s).
+_UPSTREAM_ATTEMPTS = 5
+_UPSTREAM_BACKOFF = (1.0, 2.0, 4.0, 8.0)
 # HTTP statuses that are worth retrying (transient). 4xx other than 408/429 is
 # the caller's fault and is not retried.
 _RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
@@ -559,6 +559,13 @@ def _post_chat(model, messages, tools=None, api_key=None):
             last_err = e
             if e.code in _RETRYABLE_HTTP and attempt < _UPSTREAM_ATTEMPTS:
                 wait = _UPSTREAM_BACKOFF[attempt - 1]
+                if e.code == 429:
+                    retry_after = e.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            wait = max(wait, float(retry_after))
+                        except ValueError:
+                            pass
                 log.warning("upstream HTTP %s (attempt %d/%d), retry in %.1fs",
                             e.code, attempt, _UPSTREAM_ATTEMPTS, wait)
                 time.sleep(wait)
@@ -721,7 +728,7 @@ class H(http.server.BaseHTTPRequestHandler):
 
         model = req.get("model") or "cy/i1a"
         messages = _responses_to_messages(req)
-        max_tool_rounds = 6
+        max_tool_rounds = 12
 
         final_text = ""
         final_reasoning = ""
@@ -789,9 +796,17 @@ class H(http.server.BaseHTTPRequestHandler):
                         "content": output_str,
                     })
             else:
-                final_text = (
-                    f"CY: tool loop did not converge after {max_tool_rounds} rounds."
-                )
+                if not final_text and text:
+                    final_text = text
+                if not final_text:
+                    final_text = (
+                        f"CY: tool loop did not converge after {max_tool_rounds} rounds. "
+                        "Try a simpler request or check your connection."
+                    )
+                else:
+                    final_text = final_text + (
+                        f"\n\n[Note: tool loop stopped after {max_tool_rounds} rounds]"
+                    )
         except Exception as e:
             log.exception("bridge error")
             final_text = f"CY: bridge error: {type(e).__name__}: {e}"
