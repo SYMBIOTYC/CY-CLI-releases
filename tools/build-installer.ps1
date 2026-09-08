@@ -4,7 +4,10 @@ param(
     [Parameter(Mandatory = $true)][string]$WrapperPath,
     [Parameter(Mandatory = $true)][string]$Version,
     [string]$OutDir = (Get-Location).Path,
-    [string]$InstallerName = 'CY-CLI-x86_64-setup.exe'
+    [string]$InstallerName = 'CY-CLI-x86_64-setup.exe',
+    [string]$LauncherPath = '',
+    [string]$BridgePath = '',
+    [string]$ThemesDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +20,19 @@ $IssPath   = Join-Path $OutDir 'installer.iss'
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 Copy-Item $BinPath (Join-Path $BinDir 'cy.exe') -Force
 Copy-Item $WrapperPath (Join-Path $OutDir 'cy-wrapper.ps1') -Force
+
+# Optional parity assets (launcher + local bridge + branded themes).
+if ($LauncherPath -and (Test-Path $LauncherPath)) { Copy-Item $LauncherPath (Join-Path $OutDir 'launch-cy.ps1') -Force }
+if ($BridgePath -and (Test-Path $BridgePath)) { Copy-Item $BridgePath (Join-Path $OutDir 'cy_bridge.py') -Force }
+if ($ThemesDir -and (Test-Path $ThemesDir)) {
+    $ThemesOut = Join-Path $OutDir 'themes'
+    New-Item -ItemType Directory -Force -Path $ThemesOut | Out-Null
+    Copy-Item (Join-Path $ThemesDir '*.tmTheme') $ThemesOut -Force -ErrorAction SilentlyContinue
+}
+$extraFiles = ''
+if ($LauncherPath -and (Test-Path (Join-Path $OutDir 'launch-cy.ps1'))) { $extraFiles += "Source: ""launch-cy.ps1""; DestDir: ""{app}""; Flags: ignoreversion`r`n" }
+if ($BridgePath -and (Test-Path (Join-Path $OutDir 'cy_bridge.py'))) { $extraFiles += "Source: ""cy_bridge.py""; DestDir: ""{app}""; Flags: ignoreversion`r`n" }
+if ($ThemesDir -and (Test-Path (Join-Path $OutDir 'themes\*.tmTheme'))) { $extraFiles += "Source: ""themes\*.tmTheme""; DestDir: ""{app}\themes""; Flags: ignoreversion`r`n" }
 
 @"
 CY-CLI is licensed under the Apache License 2.0.
@@ -63,6 +79,7 @@ Name: "addtopath"; Description: "Add {#MyAppName} to your PATH"; GroupDescriptio
 [Files]
 Source: "bin\cy.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "cy-wrapper.ps1"; DestDir: "{app}"; Flags: ignoreversion
+$extraFiles
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"

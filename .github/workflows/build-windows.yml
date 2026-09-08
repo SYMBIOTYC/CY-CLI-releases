@@ -138,7 +138,12 @@ jobs:
         run: |
           BIN="cy-cli-private/.fundament/cx-rs/target/x86_64-pc-windows-msvc/release/cy.exe"
           cp "$BIN" cy.exe
-          powershell Compress-Archive -Path cy.exe -DestinationPath cy-x86_64-pc-windows-msvc.zip
+          mkdir -p zip-stage/themes
+          cp cy.exe zip-stage/
+          cp release-repo/tools/launch-cy.ps1 zip-stage/ 2>/dev/null || echo "WARN: launch-cy.ps1 missing"
+          cp release-repo/packaging/bridge/cy_bridge.py zip-stage/ 2>/dev/null || echo "WARN: cy_bridge.py missing"
+          cp release-repo/packaging/themes/*.tmTheme zip-stage/themes/ 2>/dev/null || echo "WARN: themes missing"
+          powershell Compress-Archive -Path 'zip-stage/*' -DestinationPath cy-x86_64-pc-windows-msvc.zip
           powershell -Command "Get-FileHash -Algorithm SHA256 cy-x86_64-pc-windows-msvc.zip | Select-Object -ExpandProperty Hash | Set-Content -Encoding ASCII -NoNewline -Path cy-x86_64-pc-windows-msvc.zip.sha256"
 
       - name: Build Windows .exe installer
@@ -155,6 +160,9 @@ jobs:
             -BinPath $BIN `
             -WrapperPath $WRAPPER `
             -Version $VERSION `
+            -LauncherPath "${{ github.workspace }}\release-repo\tools\launch-cy.ps1" `
+            -BridgePath "${{ github.workspace }}\release-repo\packaging\bridge\cy_bridge.py" `
+            -ThemesDir "${{ github.workspace }}\release-repo\packaging\themes" `
             -OutDir "${{ github.workspace }}"
         timeout-minutes: 30
 

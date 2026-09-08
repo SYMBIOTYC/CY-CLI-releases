@@ -39,6 +39,11 @@ jobs:
           token: ${{ secrets.PAT_FOR_PRIVATE_REPO }}
           path: cy-cli-private
 
+      - name: Checkout release repo assets
+        uses: actions/checkout@v4
+        with:
+          path: release-repo
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -116,7 +121,10 @@ jobs:
         run: |
           BIN="cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy"
           cp "$BIN" cy
-          tar czf ${{ matrix.artifact }} cy
+          cp release-repo/tools/launch-cy.sh launch-cy.sh
+          chmod +x launch-cy.sh cy
+          cp release-repo/packaging/bridge/cy_bridge.py cy_bridge.py
+          tar czf ${{ matrix.artifact }} cy launch-cy.sh cy_bridge.py
           sha256sum ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
 
       - name: Upload artifacts
