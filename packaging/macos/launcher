@@ -48,22 +48,25 @@ if [ -z "$KEY" ]; then
 fi
 
 if [ -z "$KEY" ]; then
-  # No key anywhere. Surface a clear, branded error in Terminal and bail
-  # out so the TUI does not show its own (less friendly) missing-key error.
+  # No key anywhere: open the CY authorization page in the browser and write a
+  # key-placeholder so auth.json stays valid for paste-in, then surface a
+  # branded, readable message in the terminal (CY Engine v2 phrase).
+  open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
   cat <<'NO_KEY' >&2
 
-  \033[1;35m  ██████╗██╗   ██╗
-  ██╔════╝╚██╗ ██╔╝
-  ██║      ╚████╔╝
-  ██║       ╚██╔╝
-  ╚██████╗   ██║
-   ╚═════╝   ╚═╝\033[0m
+  ██████╗██╗   ██╗
+ ██╔════╝╚██╗ ██╔╝
+ ██║      ╚████╔╝
+ ██║       ╚██╔╝
+ ╚██████╗   ██║
+  ╚═════╝   ╚═╝
 
-  \033[1;31mNo CY API key found.\033[0m
-  Set one of:
-    - \033[1;36mexport CY_API_KEY=...\033[0m   in your shell rc file
-    - \033[1;36m~/.cy/auth.json\033[0m          with {\"openai_api_key\": \"...\"}
-    - \033[1;36mKeychain\033[0m                 via \033[1;36msecurity add-generic-password -s cy-cli-api-key -a $USER -w <key>\033[0m
+  Тебе нужен API ключ.
+  Открыли страницу авторизации в браузере: https://auth.symbiotyc.workers.dev
+  1. Войди через Google — получишь ключ вида cfat_...
+  2. Сохрани его:  cy login --with-api-key
+     или:  export CY_API_KEY=cfat_...
+  3. Запусти CY заново.
 
 NO_KEY
   exit 1

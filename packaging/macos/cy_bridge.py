@@ -415,6 +415,14 @@ def _strip_html(text):
     return text.strip()
 
 
+_FETCH_CACHE = {}
+_FETCH_CACHE_TTL = 120.0
+_FETCH_UAS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+]
+
+
 def _tool_browser_fetch(args):
     """Fetch a URL via curl and return clean text content."""
     url = args.get("url", "")
@@ -424,30 +432,93 @@ def _tool_browser_fetch(args):
     headers = args.get("headers") or {}
     body = args.get("body")
     max_bytes = int(args.get("max_bytes") or 200000)
+    if max_bytes > 20000:
+        max_bytes = 20000
 
-    cmd = ["curl", "-sL", "-m", "30", "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) CY-CLI/1.0"]
-    for k, v in headers.items():
-        cmd.extend(["-H", f"{k}: {v}"])
-    if method == "POST" and body:
-        cmd.extend(["-X", "POST", "-d", body])
-        if "Content-Type" not in headers:
-            cmd.extend(["-H", "Content-Type: application/json"])
-    elif method != "GET":
-        cmd.extend(["-X", method])
-    cmd.append(url)
+    cache_key = (method, url)
+    now = time.time()
+    hit = _FETCH_CACHE.get(cache_key)
+    if hit and now - hit[0] < _FETCH_CACHE_TTL:
+        return hit[1]
 
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "timeout after 30s"}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    import random as _rnd
+    last_result = None
+    for attempt in range(1, 5):
+        ua = _FETCH_UAS[(attempt - 1) % len(_FETCH_UAS)]
+        cmd = ["curl", "-sL", "--compressed", "--connect-timeout", "8", "-m", "20",
+               "-A", ua,
+               "-H", "Accept: text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+               "-H", "Accept-Language: en-US,en;q=0.9,ru;q=0.8",
+               "-D", "-", "-o", "-", "-w", "\n__CY_HTTP_CODE:%{http_code}"]
+        for k, v in headers.items():
+            cmd.extend(["-H", f"{k}: {v}"])
+        if body is not None and method in ("POST", "PUT", "PATCH", "DELETE"):
+            cmd.extend(["-X", method, "-d", body])
+            if "Content-Type" not in headers:
+                cmd.extend(["-H", "Content-Type: application/json"])
+        elif method != "GET":
+            cmd.extend(["-X", method])
+        cmd.append(url)
 
-    if proc.returncode != 0:
-        stderr = (proc.stderr or "")[:500]
-        return {"ok": False, "error": f"curl exit {proc.returncode}: {stderr}"}
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+        except subprocess.TimeoutExpired:
+            last_result = {"ok": False, "error": "timeout after 25s"}
+            time.sleep(min(20.0, 2 ** attempt + _rnd.uniform(0, 1)))
+            continue
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-    raw = proc.stdout or ""
+        if proc.returncode != 0:
+            stderr = (proc.stderr or "")[:500]
+            last_result = {"ok": False, "error": f"curl exit {proc.returncode}: {stderr}"}
+            time.sleep(min(20.0, 2 ** attempt + _rnd.uniform(0, 1)))
+            continue
+
+        out = proc.stdout or ""
+        status = 200
+        if "__CY_HTTP_CODE:" in out:
+            body_part, _, marker = out.rpartition("__CY_HTTP_CODE:")
+            try:
+                status = int((marker.strip().split()[0]))
+            except Exception:
+                status = 200
+            # strip response headers dumped by -D - (they precede the body)
+            if "\r\n\r\n" in body_part:
+                body_part = body_part.rsplit("\r\n\r\n", 1)[-1]
+            out = body_part
+        raw = out
+        if status in (429, 503):
+            retry_after = None
+            m = re.search(r"(?im)^retry-after:\s*([^\r\n]+)", raw + "\n" + (proc.stderr or ""))
+            if m:
+                try:
+                    retry_after = float(m.group(1).strip())
+                except ValueError:
+                    retry_after = None
+            wait = min(30.0, 2 ** attempt + _rnd.uniform(0, 1))
+            if retry_after is not None:
+                wait = min(30.0, max(wait, retry_after))
+            if attempt < 4:
+                log.warning("browser_fetch HTTP %s %s, retry %d/4 in %.1fs", status, url, attempt, wait)
+                time.sleep(wait)
+                continue
+            last_result = {"ok": False, "error": f"http {status} Too Many Requests for {url}",
+                           "http_status": status, "retry_after": retry_after,
+                           "hint": "site rate-limited — summarize from other sources, do not retry same URL"}
+            break
+        if status >= 400:
+            last_result = {"ok": False, "error": f"http {status} for {url}", "http_status": status}
+            break
+        # success — fall through to text extraction using `raw`
+        proc_ok_raw = raw
+        proc_ok_status = status
+        break
+    else:
+        return last_result or {"ok": False, "error": "fetch failed"}
+    if last_result is not None and not last_result.get("ok"):
+        return last_result
+    raw = proc_ok_raw
     # Try to detect if it's HTML and strip tags
     is_html = "<html" in raw[:1000].lower() or "<body" in raw[:1000].lower() or "<!doctype" in raw[:1000].lower()
     if is_html:
@@ -683,6 +754,27 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
 
+    def _sse_simple(self, text):
+        # Stream a canned CY answer as a complete Responses SSE payload.
+        self._open_sse()
+        rid = f"resp_{int(time.time()*1000)}"
+        mid = f"msg_{rid}"
+        evs = [
+            ("response.created", {"type": "response.created", "response": {"id": rid, "object": "response", "created_at": int(time.time()), "model": "cy/i1a", "status": "in_progress"}}),
+            ("response.output_item.added", {"type": "response.output_item.added", "output_index": 0, "item": {"id": mid, "type": "message", "role": "assistant", "status": "in_progress", "content": []}}),
+            ("response.content_part.added", {"type": "response.content_part.added", "item_id": mid, "output_index": 0, "content_index": 0, "part": {"type": "output_text", "text": "", "annotations": []}}),
+            ("response.output_text.delta", {"type": "response.output_text.delta", "item_id": mid, "output_index": 0, "content_index": 0, "delta": text}),
+            ("response.output_text.done", {"type": "response.output_text.done", "item_id": mid, "output_index": 0, "content_index": 0, "text": text}),
+            ("response.output_item.done", {"type": "response.output_item.done", "output_index": 0, "item": {"id": mid, "type": "message", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": text, "annotations": []}]}}),
+            ("response.completed", {"type": "response.completed", "response": {"id": rid, "object": "response", "created_at": int(time.time()), "model": "cy/i1a", "status": "completed", "output": [{"id": mid, "type": "message", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": text, "annotations": []}]}], "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}}),
+        ]
+        for name, payload in evs:
+            try:
+                self.wfile.write(f"event: {name}\ndata: {json.dumps(payload)}\n\n".encode())
+                self.wfile.flush()
+            except Exception:
+                return
+
     def do_GET(self):
         if "websocket" in self.headers.get("Upgrade", "").lower() or "Upgrade" in self.headers:
             self.send_response(101)
@@ -701,6 +793,44 @@ class H(http.server.BaseHTTPRequestHandler):
             )
             self.end_headers()
             return
+        # CY: doctor probes GET /v1/models (must NOT be 404) and HEAD /v1/responses.
+        path = self.path.split("?", 1)[0].rstrip("/") or "/"
+        if path in ("/v1/models", "/models"):
+            payload = json.dumps({
+                "object": "list",
+                "data": [{
+                    "id": "cy/i1a",
+                    "object": "model",
+                    "owned_by": "symbiotyc",
+                }],
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if path in ("/v1/responses", "/responses", "/v1", "/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "2")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(b"{}")
+            return
+        self.send_error(404)
+
+    def do_HEAD(self):
+        # CY: doctor does HEAD <base>/responses to check reachability.
+        path = self.path.split("?", 1)[0].rstrip("/") or "/"
+        if path in ("/v1/responses", "/responses", "/v1/models", "/models", "/v1", "/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            return
         self.send_error(404)
 
     def do_POST(self):
@@ -716,11 +846,14 @@ class H(http.server.BaseHTTPRequestHandler):
 
         api_key = _resolve_key(self.headers.get("Authorization", ""))
         if not api_key:
-            self.send_error(
-                502,
-                "No CY API key found. Set CY_API_KEY, add your key to "
-                f"{CY_HOME}/auth.json, or run cy login.",
+            # CY Engine v2 memory: no-key users get the branded guidance phrase
+            # as a normal streamed CY answer (so the TUI shows it, not an error).
+            phrase = (
+                "Тебе нужен API ключ. Получи его через Google: зайди на "
+                "https://auth.symbiotyc.workers.dev , войди и скопируй ключ — "
+                "либо выполни в терминале: cy login. После этого я заработаю в нормальном режиме."
             )
+            self._sse_simple(phrase)
             return
 
         t_start = time.time()
@@ -736,10 +869,19 @@ class H(http.server.BaseHTTPRequestHandler):
         final_usage = {}
 
         try:
+            seen_tool_keys = {}
+            last_text_with_content = ""
+            consecutive_fetch_429 = 0
             for round_idx in range(max_tool_rounds):
-                chat_resp = _post_chat(model, messages, tools=TOOLS, api_key=api_key)
+                # Last 2 rounds: force text answer, no more tools.
+                force_text = round_idx >= max_tool_rounds - 2
+                round_tools = None if force_text else TOOLS
+                round_msgs = messages
+                if force_text:
+                    round_msgs = messages + [{"role": "developer", "content": "STOP: answer now best-effort from tool results so far. No more tool_calls."}]
+                chat_resp = _post_chat(model, round_msgs, tools=round_tools, api_key=api_key)
                 assistant = _extract_assistant(chat_resp)
-                tool_calls = assistant["tool_calls"]
+                tool_calls = assistant["tool_calls"] if not force_text else []
                 text = assistant["text"]
                 reasoning = assistant["reasoning"]
                 usage = assistant["usage"]
@@ -747,6 +889,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 final_usage = usage
                 if reasoning:
                     final_reasoning = reasoning
+                if text and text.strip():
+                    last_text_with_content = text
 
                 asst_msg = {"role": "assistant", "content": text or ""}
                 if tool_calls:
@@ -764,15 +908,63 @@ class H(http.server.BaseHTTPRequestHandler):
                     final_text = text
                     break
 
-                # Tool-use round: execute each tool in parallel and append the
-                # results in the original order. Capped at 4 workers so a model
-                # that requests many shell_execs at once cannot fork-bomb the
-                # box.
+                # Loop detection: same tool+args repeated => force synthesis.
+                loop_hit = False
+                for tc in tool_calls:
+                    try:
+                        norm_args = json.dumps(json.loads(tc["arguments"] or "{}"), sort_keys=True)
+                    except Exception:
+                        norm_args = (tc["arguments"] or "").strip()
+                    if tc["name"] == "browser_fetch":
+                        try:
+                            u = json.loads(tc["arguments"] or "{}").get("url", "")
+                            norm_args = "fetch:" + u.lower().rstrip("/")
+                        except Exception:
+                            pass
+                    key = (tc["name"], norm_args)
+                    seen_tool_keys[key] = seen_tool_keys.get(key, 0) + 1
+                    log.info("round %d/%d tool=%s args=%.200s (x%d)", round_idx + 1, max_tool_rounds, tc["name"], tc["arguments"], seen_tool_keys[key])
+                    if seen_tool_keys[key] >= 3:
+                        loop_hit = True
+                if loop_hit:
+                    messages.append({"role": "developer", "content": "LOOP: same tool+args called 3x. Synthesize best-effort answer from prior results now, do not retry."})
+                    if last_text_with_content:
+                        final_text = last_text_with_content
+                        break
+                    # fall through to one forced-text round
+                    force_msgs = messages + [{"role": "developer", "content": "STOP: same call repeated 3x. Answer now without tools."}]
+                    try:
+                        chat_resp2 = _post_chat(model, force_msgs, tools=None, api_key=api_key)
+                        final_text = _extract_assistant(chat_resp2)["text"] or last_text_with_content
+                    except Exception:
+                        final_text = last_text_with_content
+                    if final_text:
+                        break
+                    final_text = "CY: stopped repeating the same action — please rephrase or narrow the request."
+                    break
+
+                # Tool-use round: execute each tool and append results in order.
+                # Same-host browser_fetch bursts run sequentially with a gap
+                # (parallel curls to one host trigger WAF 429); others parallel.
+                def _fetch_host(tc):
+                    if tc["name"] != "browser_fetch":
+                        return ""
+                    try:
+                        import urllib.parse as _up
+                        return _up.urlparse(json.loads(tc["arguments"] or "{}").get("url", "")).netloc.lower()
+                    except Exception:
+                        return ""
                 if len(tool_calls) == 1:
                     ordered = [_run_tool(tool_calls[0]["name"], tool_calls[0]["arguments"])]
+                elif all(tc["name"] == "browser_fetch" for tc in tool_calls) and len({_fetch_host(tc) for tc in tool_calls}) == 1:
+                    ordered = []
+                    for tc in tool_calls:
+                        ordered.append(_run_tool(tc["name"], tc["arguments"]))
+                        time.sleep(1.2)
                 else:
+                    use_workers = 2 if any(tc["name"] == "browser_fetch" for tc in tool_calls) else 4
                     with concurrent.futures.ThreadPoolExecutor(
-                            max_workers=min(4, len(tool_calls))) as ex:
+                            max_workers=min(use_workers, len(tool_calls))) as ex:
                         futures = {
                             ex.submit(_run_tool, tc["name"], tc["arguments"]): tc
                             for tc in tool_calls
@@ -780,7 +972,7 @@ class H(http.server.BaseHTTPRequestHandler):
                         results_by_id = {}
                         for fut, tc in futures.items():
                             try:
-                                results_by_id[tc["id"]] = fut.result()
+                                results_by_id[tc["id"]] = fut.result(timeout=40)
                             except Exception as e:
                                 results_by_id[tc["id"]] = {
                                     "ok": False,
@@ -789,14 +981,38 @@ class H(http.server.BaseHTTPRequestHandler):
                     ordered = [results_by_id[tc["id"]] for tc in tool_calls]
 
                 for tc, tool_result in zip(tool_calls, ordered):
+                    # Count rate-limited fetches for circuit breaker.
+                    try:
+                        tr_str = json.dumps(tool_result, ensure_ascii=False)
+                        if tc["name"] == "browser_fetch" and ("429" in tr_str or "Too Many Requests" in tr_str):
+                            consecutive_fetch_429 += 1
+                        elif tc["name"] == "browser_fetch":
+                            consecutive_fetch_429 = 0
+                    except Exception:
+                        pass
                     output_str = json.dumps(tool_result, ensure_ascii=False)
+                    # Prune huge tool outputs so context stays bounded.
+                    if len(output_str) > 6000:
+                        output_str = output_str[:6000] + f"\n... [truncated {len(output_str)-6000} chars — DO NOT refetch, summarize from this excerpt]"
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc["id"],
                         "content": output_str,
                     })
+                # Prune old tool messages to bound context.
+                if len(messages) > 20:
+                    for m in messages[1:-10]:
+                        if m.get("role") == "tool" and isinstance(m.get("content"), str) and len(m["content"]) > 8000:
+                            m["content"] = m["content"][:8000] + "\n... [pruned for context]"
+                # Circuit breaker: site keeps rate-limiting => stop early.
+                if consecutive_fetch_429 >= 3:
+                    final_text = (last_text_with_content + "\n\n[Note: site rate-limited repeated fetches — answer from what was gathered.]") if last_text_with_content else "CY: site rate-limited repeated fetches. Try again in a minute or ask for a summary from another source."
+                    break
+                time.sleep(0.5)
             else:
-                if not final_text and text:
+                if not final_text and last_text_with_content:
+                    final_text = last_text_with_content
+                elif not final_text and text:
                     final_text = text
                 if not final_text:
                     final_text = (
