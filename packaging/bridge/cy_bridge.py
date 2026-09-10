@@ -850,8 +850,8 @@ class H(http.server.BaseHTTPRequestHandler):
             # as a normal streamed CY answer (so the TUI shows it, not an error).
             phrase = (
                 "Тебе нужен API ключ. Получи его через Google: зайди на "
-                "https://auth.symbiotyc.workers.dev , войди и скопируй ключ — "
-                "либо выполни в терминале: cy login. После этого я заработаю в нормальном режиме."
+                "https://auth.symbiotyc.workers.dev , войди через Google и скопируй ключ. "
+                "Затем выполни: cy login --with-api-key <ключ>"
             )
             self._sse_simple(phrase)
             return
@@ -1023,6 +1023,17 @@ class H(http.server.BaseHTTPRequestHandler):
                     final_text = final_text + (
                         f"\n\n[Note: tool loop stopped after {max_tool_rounds} rounds]"
                     )
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                log.error("auth error: HTTP %s", e.code)
+                final_text = (
+                    "CY: Твой API ключ недействителен. Получи новый через Google: "
+                    "https://auth.symbiotyc.workers.dev — войди через Google и скопируй ключ. "
+                    "Затем: cy login --with-api-key <ключ>"
+                )
+            else:
+                log.exception("bridge error")
+                final_text = f"CY: bridge error: HTTP {e.code}: {e}"
         except Exception as e:
             log.exception("bridge error")
             final_text = f"CY: bridge error: {type(e).__name__}: {e}"
