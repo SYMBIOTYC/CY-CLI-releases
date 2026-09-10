@@ -38,9 +38,33 @@ fi
 KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
 
 if [ -z "$KEY" ]; then
-  echo "cy: no API key. Set CY_API_KEY, add it to ~/.cy/auth.json, or run:" >&2
-  echo "    security add-generic-password -s cy-cli-api-key -a \$USER -w <KEY>" >&2
-  exit 1
+  # No key: start local auth server, open browser, wait for key
+  AUTH_SERVER="$APP_DIR/Resources/cy_auth_server.py"
+  if [ -f "$AUTH_SERVER" ]; then
+    echo "cy: запускаем авторизацию через Google..." >&2
+    echo "    Откроется браузер — войди через Google." >&2
+    python3 "$AUTH_SERVER" &
+    AUTH_PID=$!
+    wait $AUTH_PID 2>/dev/null || true
+    # Re-read key
+    if [ -f "$CY_HOME/auth.json" ]; then
+      KEY="$(python3 -c "
+import json
+try:
+    with open('$CY_HOME/auth.json') as f:
+        data = json.load(f)
+    print(data.get('cy_api_key', '') or data.get('CY_API_KEY', ''))
+except Exception:
+    print('')
+" 2>/dev/null || true)"
+      KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
+    fi
+  fi
+  if [ -z "$KEY" ]; then
+    echo "cy: no API key. Set CY_API_KEY, add it to ~/.cy/auth.json, or run:" >&2
+    echo "    cy login --with-api-key" >&2
+    exit 1
+  fi
 fi
 
 # --- Ensure the bridge is running ------------------------------------------

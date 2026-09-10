@@ -48,11 +48,54 @@ if [ -z "$KEY" ]; then
 fi
 
 if [ -z "$KEY" ]; then
-  # No key anywhere: open the CY authorization page in the browser and write a
-  # key-placeholder so auth.json stays valid for paste-in, then surface a
-  # branded, readable message in the terminal (CY Engine v2 phrase).
-  open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
-  cat <<'NO_KEY' >&2
+  # No key anywhere: start local auth server, open browser, wait for key
+  AUTH_SERVER="$APP_DIR/Resources/cy_auth_server.py"
+  if [ -f "$AUTH_SERVER" ]; then
+    cat <<'AUTH_MSG' >&2
+
+  ██████╗██╗   ██╗
+ ██╔════╝╚██╗ ██╔╝
+ ██║      ╚████╔╝
+ ██║       ╚██╔╝
+ ╚██████╗   ██║
+  ╚═════╝   ╚═╝
+
+  Запускаем авторизацию через Google...
+  Откроется браузер — войди через Google.
+  Ключ автоматически сохранится в ~/.cy/auth.json
+
+AUTH_MSG
+    # Start auth server and wait for key
+    python3 "$AUTH_SERVER" &
+    AUTH_PID=$!
+    # Wait up to 5 minutes for auth
+    wait $AUTH_PID 2>/dev/null || true
+    # Re-read key from auth.json
+    if [ -f "$AUTH_FILE" ]; then
+      KEY="$(python3 -c "
+import json, sys
+try:
+    with open('$AUTH_FILE') as f:
+        data = json.load(f)
+    v = data.get('cy_api_key') or data.get('CY_API_KEY') or ''
+    print(v if isinstance(v, str) else '')
+except Exception:
+    print('')
+" 2>/dev/null || true)"
+      KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
+    fi
+    if [ -z "$KEY" ]; then
+      cat <<'NO_KEY' >&2
+  Авторизация не завершена.
+  Попробуй снова:  cy login --with-api-key
+  Или:  export CY_API_KEY=cfat_...
+NO_KEY
+      exit 1
+    fi
+  else
+    # Fallback: open browser for manual flow
+    open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
+    cat <<'NO_KEY' >&2
 
   ██████╗██╗   ██╗
  ██╔════╝╚██╗ ██╔╝
@@ -69,7 +112,8 @@ if [ -z "$KEY" ]; then
   3. Запусти CY заново.
 
 NO_KEY
-  exit 1
+    exit 1
+  fi
 fi
 
 # --- Write auth.json (overwrite empty one) ----------------------------------

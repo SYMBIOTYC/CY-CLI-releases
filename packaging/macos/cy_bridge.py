@@ -850,7 +850,7 @@ class H(http.server.BaseHTTPRequestHandler):
             # as a normal streamed CY answer (so the TUI shows it, not an error).
             phrase = (
                 "Тебе нужен API ключ. Получи его через Google: зайди на "
-                "https://auth.symbiotyc.workers.dev , войди и скопируй ключ — "
+                "https://auth.symbiotyc.workers.dev , войди через Google и скопируй ключ — "
                 "либо выполни в терминале: cy login. После этого я заработаю в нормальном режиме."
             )
             self._sse_simple(phrase)
