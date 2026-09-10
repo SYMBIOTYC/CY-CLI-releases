@@ -12,7 +12,7 @@ on:
       tag:
         description: 'Git tag or branch to build'
         required: true
-        default: 'v0.3.4'
+        default: 'v0.3.6'
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
             if ! gh release view "$TAG" >/dev/null 2>&1; then
               echo "Creating draft release $TAG"
               gh release create "$TAG" --draft \
-                --title "CY-CLI $TAG" \
+                --title "CY CLI $TAG" \
                 --notes "Auto-generated draft. Changelog will be edited manually before publishing."
             else
               echo "Release $TAG already exists; skipping create"
@@ -229,7 +229,7 @@ jobs:
             <key>CFBundleDisplayName</key>
             <string>CY CLI</string>
             <key>CFBundleVersion</key>
-            <string>1.0.0</string>
+            <string>0.3.6</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
             <key>CFBundleSignature</key>
