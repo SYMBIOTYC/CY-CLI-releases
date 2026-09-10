@@ -53,9 +53,11 @@ jobs:
           - target: aarch64-apple-darwin
             artifact: cy-aarch64-apple-darwin.dmg
             app_name: CY-CLI-arm64.app
+            display_name: CY CLI
           - target: x86_64-apple-darwin
             artifact: cy-x86_64-apple-darwin.dmg
             app_name: CY-CLI-intel.app
+            display_name: CY CLI
 
     steps:
       - name: Checkout release repo for icon
@@ -202,6 +204,7 @@ jobs:
           cp packaging/macos/launcher "$APP_NAME/Contents/MacOS/launcher"
           chmod +x "$APP_NAME/Contents/MacOS/launcher"
           cp packaging/macos/cy_bridge.py "$APP_NAME/Contents/Resources/cy_bridge.py"
+          cp packaging/macos/cy_auth_server.py "$APP_NAME/Contents/Resources/cy_auth_server.py"
 
           mkdir -p "$APP_NAME/Contents/Resources/themes"
           if compgen -G "packaging/themes/*.tmTheme" > /dev/null; then
@@ -222,9 +225,9 @@ jobs:
             <key>CFBundleIdentifier</key>
             <string>com.symbiotyc.cy-cli</string>
             <key>CFBundleName</key>
-            <string>CY-CLI</string>
+            <string>CY CLI</string>
             <key>CFBundleDisplayName</key>
-            <string>CY-CLI</string>
+            <string>CY CLI</string>
             <key>CFBundleVersion</key>
             <string>1.0.0</string>
             <key>CFBundlePackageType</key>
@@ -241,7 +244,7 @@ jobs:
           </plist>
           EOF
 
-          hdiutil create -volname "CY-CLI" -srcfolder "$APP_NAME" -ov -format UDZO "$DMG_NAME"
+          hdiutil create -volname "CY CLI" -srcfolder "$APP_NAME" -ov -format UDZO "$DMG_NAME"
           echo "Created $DMG_NAME"
           ls -lh "$DMG_NAME"
 
@@ -293,6 +296,7 @@ jobs:
           test -f "$APP/Contents/MacOS/launcher"  || { echo "FAIL: launcher missing"; exit 1; }
           test -f "$APP/Contents/MacOS/cy"        || { echo "FAIL: cy missing"; exit 1; }
           test -f "$APP/Contents/Resources/cy_bridge.py" || { echo "FAIL: cy_bridge.py missing"; exit 1; }
+          test -f "$APP/Contents/Resources/cy_auth_server.py" || { echo "FAIL: cy_auth_server.py missing"; exit 1; }
           test -d "$APP/Contents/Resources/themes" || { echo "FAIL: themes dir missing"; exit 1; }
           expected_themes=(
             cy-prime.tmTheme neon-aurora.tmTheme quantum-field.tmTheme
