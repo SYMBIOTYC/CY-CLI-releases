@@ -51,13 +51,13 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            artifact: cy-aarch64-apple-darwin.dmg
-            app_name: CY-CLI-arm64.app
-            display_name: CY CLI
+            artifact: CY-CLI-arm64.dmg
+            app_name: CY CLI.app
+            app_dir_name: CY-CLI-arm64.app
           - target: x86_64-apple-darwin
-            artifact: cy-x86_64-apple-darwin.dmg
-            app_name: CY-CLI-intel.app
-            display_name: CY CLI
+            artifact: CY-CLI-intel.dmg
+            app_name: CY CLI.app
+            app_dir_name: CY-CLI-intel.app
 
     steps:
       - name: Checkout release repo for icon
@@ -175,10 +175,10 @@ jobs:
       - name: Patch binary - remove trust prompt
         shell: bash
         run: |
-          APP_NAME="${{ matrix.app_name }}"
+          APP_DIR="${{ matrix.app_dir_name }}"
           python3 packaging/tools/patch-binary.py \
             "cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy" \
-            "$APP_NAME"
+            "$APP_DIR"
 
       - name: Package macOS .dmg
         if: always()
@@ -186,36 +186,36 @@ jobs:
         shell: bash
         run: |
           BIN="cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy"
-          APP_NAME="${{ matrix.app_name }}"
+          APP_DIR="${{ matrix.app_dir_name }}"
           DMG_NAME="${{ matrix.artifact }}"
 
-          mkdir -p "$APP_NAME/Contents/MacOS"
-          mkdir -p "$APP_NAME/Contents/Resources"
+          mkdir -p "$APP_DIR/Contents/MacOS"
+          mkdir -p "$APP_DIR/Contents/Resources"
 
-          cp "$BIN" "$APP_NAME/Contents/MacOS/cy"
-          chmod +x "$APP_NAME/Contents/MacOS/cy"
+          cp "$BIN" "$APP_DIR/Contents/MacOS/cy"
+          chmod +x "$APP_DIR/Contents/MacOS/cy"
 
           if [ -f "icon.icns" ]; then
-            cp icon.icns "$APP_NAME/Contents/Resources/icon.icns"
+            cp icon.icns "$APP_DIR/Contents/Resources/icon.icns"
           else
             echo "WARN: icon.icns not found in release repo; skipping app icon"
           fi
 
-          cp packaging/macos/launcher "$APP_NAME/Contents/MacOS/launcher"
-          chmod +x "$APP_NAME/Contents/MacOS/launcher"
-          cp packaging/macos/cy_bridge.py "$APP_NAME/Contents/Resources/cy_bridge.py"
-          cp packaging/macos/cy_auth_server.py "$APP_NAME/Contents/Resources/cy_auth_server.py"
+          cp packaging/macos/launcher "$APP_DIR/Contents/MacOS/launcher"
+          chmod +x "$APP_DIR/Contents/MacOS/launcher"
+          cp packaging/macos/cy_bridge.py "$APP_DIR/Contents/Resources/cy_bridge.py"
+          cp packaging/macos/cy_auth_server.py "$APP_DIR/Contents/Resources/cy_auth_server.py"
 
-          mkdir -p "$APP_NAME/Contents/Resources/themes"
+          mkdir -p "$APP_DIR/Contents/Resources/themes"
           if compgen -G "packaging/themes/*.tmTheme" > /dev/null; then
-            cp packaging/themes/*.tmTheme "$APP_NAME/Contents/Resources/themes/"
+            cp packaging/themes/*.tmTheme "$APP_DIR/Contents/Resources/themes/"
           else
             echo "WARN: no .tmTheme files found in packaging/themes/; skipping themes"
           fi
           echo "== Bundled themes =="
-          ls "$APP_NAME/Contents/Resources/themes"
+          ls "$APP_DIR/Contents/Resources/themes"
 
-          cat > "$APP_NAME/Contents/Info.plist" << 'EOF'
+          cat > "$APP_DIR/Contents/Info.plist" << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -244,7 +244,8 @@ jobs:
           </plist>
           EOF
 
-          hdiutil create -volname "CY CLI" -srcfolder "$APP_NAME" -ov -format UDZO "$DMG_NAME"
+          # Create DMG with display name
+          hdiutil create -volname "CY CLI" -srcfolder "$APP_DIR" -ov -format UDZO "$DMG_NAME"
           echo "Created $DMG_NAME"
           ls -lh "$DMG_NAME"
 
@@ -288,7 +289,7 @@ jobs:
           TAG: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
         run: |
           BIN="cy-cli-private/.fundament/cx-rs/target/${{ matrix.target }}/release/cy"
-          APP="CY-CLI-${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'intel' }}.app"
+          APP="${{ matrix.app_dir_name }}"
           echo "== PWD =="
           pwd
           echo "== Checking $APP/Contents/MacOS =="
@@ -297,6 +298,7 @@ jobs:
           test -f "$APP/Contents/MacOS/cy"        || { echo "FAIL: cy missing"; exit 1; }
           test -f "$APP/Contents/Resources/cy_bridge.py" || { echo "FAIL: cy_bridge.py missing"; exit 1; }
           test -f "$APP/Contents/Resources/cy_auth_server.py" || { echo "FAIL: cy_auth_server.py missing"; exit 1; }
+          test -f "$APP/Contents/Resources/icon.icns" || { echo "FAIL: icon.icns missing"; exit 1; }
           test -d "$APP/Contents/Resources/themes" || { echo "FAIL: themes dir missing"; exit 1; }
           expected_themes=(
             cy-prime.tmTheme neon-aurora.tmTheme quantum-field.tmTheme

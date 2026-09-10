@@ -182,15 +182,22 @@ EOF
 # We build the splash with $'...' (ANSI-C quoting) so the escape character
 # is the literal 0x1B byte — Terminal.app will then render the colours.
 #   1;35 = bold magenta (pink), 0 = reset, 1;36 = bold cyan, 2;37 = dim grey.
+#   1;31 = bold red (for shake effect).
 ESC=$'\033'
 PINK="${ESC}[1;35m"
+RED="${ESC}[1;31m"
 CYAN="${ESC}[1;36m"
 DIM="${ESC}[2;37m"
+BOLD="${ESC}[1m"
 RESET="${ESC}[0m"
+# Shake animation frames (slight horizontal offset variations)
+SHAKE1="${ESC}[1;35m"
+SHAKE2="${ESC}[1;35;3D"
+SHAKE3="${ESC}[1;35;3C"
 
 SPLASH_FILE="$CY_HOME/.splash.ansi"
 cat > "$SPLASH_FILE" <<SPLASH_EOF
-${PINK}
+${PINK}${BOLD}
   ██████╗██╗   ██╗
  ██╔════╝╚██╗ ██╔╝
  ██║      ╚████╔╝
@@ -198,8 +205,7 @@ ${PINK}
  ╚██████╗   ██║
   ╚═════╝   ╚═╝${RESET}
 
- ${PINK}CY${RESET} ${DIM}— Symbiotic Coding Assistant${RESET}
- ${DIM}Loading TUI...${RESET}
+${PINK}${BOLD}CY${RESET}
 SPLASH_EOF
 
 # --- Open Terminal with the splash, then the CLI ---------------------------
@@ -210,15 +216,39 @@ export CY_API_KEY="$KEY"
 # Write a .command file that Terminal can execute directly.
 # This avoids the need for AppleScript Automation permissions.
 CMD_FILE="$CY_HOME/.cy_launch.command"
-cat > "$CMD_FILE" <<CMD_EOF
+cat > "$CMD_FILE" <<'CMD_EOF'
 #!/bin/bash
 export CX_HOME='$CY_HOME'
 export CODEX_HOME='$CY_HOME'
 export CY_API_KEY='$KEY'
-export PS1='\\$ '
+export PS1='\$ '
 export PROMPT_EOL=''
 clear
 cat '$SPLASH_FILE'
+
+# Shake animation: slight jitter on the CY logo
+ESC=$'\033'
+for i in $(seq 1 8); do
+  OFFSET=$((RANDOM % 3 - 1))
+  if [ "$OFFSET" -gt 0 ]; then
+    printf "${ESC}[1;35m${ESC}[1B${ESC}[%dC" "$OFFSET"
+  elif [ "$OFFSET" -lt 0 ]; then
+    printf "${ESC}[1;35m${ESC}[1B${ESC}[%dD" "$((-OFFSET))"
+  fi
+  sleep 0.15
+  printf "${ESC}[0m${ESC}[1A"
+  sleep 0.08
+done
+
+# Random click sounds at startup
+for i in $(seq 1 2); do
+  SLEEP_TIME=$(( (RANDOM % 3) + 1 ))
+  sleep "$SLEEP_TIME"
+  printf '\a'
+done
+
+# Wait a bit then launch TUI
+sleep 1
 cd '$HOME' && '$CY_BIN'
 rm -f '$SPLASH_FILE'
 rm -f '$CMD_FILE'
