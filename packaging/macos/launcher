@@ -32,7 +32,7 @@ import json, sys
 try:
     with open('$AUTH_FILE') as f:
         data = json.load(f)
-    v = data.get('CY_API_KEY') or data.get('openai_api_key') or data.get('OPENAI_API_KEY') or data.get('api_key') or ''
+    v = data.get('cy_api_key') or data.get('CY_API_KEY') or ''
     print(v if isinstance(v, str) else '')
 except Exception:
     print('')
@@ -73,7 +73,7 @@ NO_KEY
 fi
 
 # --- Write auth.json (overwrite empty one) ----------------------------------
-printf '{\n  "auth_mode": "apiKey",\n  "openai_api_key": "%s"\n}\n' "$KEY" > "$AUTH_FILE"
+printf '{\n  "auth_mode": "apiKey",\n  "cy_api_key": "%s"\n}\n' "$KEY" > "$AUTH_FILE"
 chmod 600 "$AUTH_FILE"
 
 # --- Start the local bridge if it is not already running -------------------

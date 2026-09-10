@@ -61,8 +61,7 @@ pass the same sandbox check. If the model asks to `rm -rf /` or
 | `CY_BRIDGE_LOG`       | `INFO`                                     | `DEBUG`/`INFO`/`WARNING`/`ERROR`.      |
 
 The API key is resolved, in order, from `CY_API_KEY`, then
-`$CY_HOME/auth.json` (fields: `cy_api_key`,
-`api_key`, `API_KEY`), then the `Authorization` header sent by the CLI.
+`$CY_HOME/auth.json` (field: `cy_api_key`), then the `Authorization` header sent by the CLI.
 
 ## Running standalone
 

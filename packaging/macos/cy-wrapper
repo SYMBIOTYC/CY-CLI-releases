@@ -26,7 +26,8 @@ if [ -z "$KEY" ] && [ -f "$CY_HOME/auth.json" ]; then
 import json
 try:
     with open('$CY_HOME/auth.json') as f:
-        print(json.load(f).get('openai_api_key', ''))
+        data = json.load(f)
+    print(data.get('cy_api_key', '') or data.get('CY_API_KEY', ''))
 except Exception:
     print('')
 " 2>/dev/null || true)"

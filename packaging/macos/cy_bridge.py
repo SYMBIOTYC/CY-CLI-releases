@@ -217,7 +217,7 @@ def _read_auth_file_key():
             data = json.load(fh)
     except Exception:
         return ""
-    for field in ("CY_API_KEY", "openai_api_key", "OPENAI_API_KEY", "api_key", "API_KEY"):
+    for field in ("cy_api_key", "CY_API_KEY"):
         val = data.get(field)
         if isinstance(val, str) and val.strip():
             return val.strip()
@@ -1023,6 +1023,17 @@ class H(http.server.BaseHTTPRequestHandler):
                     final_text = final_text + (
                         f"\n\n[Note: tool loop stopped after {max_tool_rounds} rounds]"
                     )
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                log.error("auth error: HTTP %s", e.code)
+                final_text = (
+                    "CY: Ошибка авторизации. Получите cy_api_key на https://auth.symbiotyc.workers.dev\n"
+                    "Затем выполните: cy login --with-api-key <ваш_ключ>\n"
+                    "Или установите переменную окружения: export CY_API_KEY=<ваш_ключ>"
+                )
+            else:
+                log.exception("bridge error")
+                final_text = f"CY: bridge error: HTTP {e.code}: {e}"
         except Exception as e:
             log.exception("bridge error")
             final_text = f"CY: bridge error: {type(e).__name__}: {e}"

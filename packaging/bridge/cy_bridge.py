@@ -217,7 +217,7 @@ def _read_auth_file_key():
             data = json.load(fh)
     except Exception:
         return ""
-    for field in ("CY_API_KEY", "openai_api_key", "OPENAI_API_KEY", "api_key", "API_KEY"):
+    for field in ("cy_api_key", "CY_API_KEY"):
         val = data.get(field)
         if isinstance(val, str) and val.strip():
             return val.strip()
