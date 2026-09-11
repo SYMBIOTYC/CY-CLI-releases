@@ -7,7 +7,7 @@
   <key>author</key>
   <string>SYMBIOTYC</string>
   <key>comment</key>
-  <string>Default SYMBIOTYC brand palette: deep void background with electric magenta accents.</string>
+  <string>Terminal-first AI coding agent palette from i52: pure black background, ANSI-like semantic colors, minimal chrome.</string>
   <key>semanticClass</key>
   <string>theme.dark.cy_prime</string>
   <key>settings</key>
@@ -16,17 +16,17 @@
       <key>settings</key>
       <dict>
         <key>background</key>
-        <string>#0A0610</string>
+        <string>#000000</string>
         <key>caret</key>
-        <string>#FF3DA8</string>
+        <string>#61AFEF</string>
         <key>foreground</key>
-        <string>#F2E6F0</string>
+        <string>#D8D8D8</string>
         <key>invisibles</key>
-        <string>#3A2D40</string>
+        <string>#1a1a1a</string>
         <key>lineHighlight</key>
-        <string>#1A0F1F</string>
+        <string>#0a0a0a</string>
         <key>selection</key>
-        <string>#2A1A35</string>
+        <string>#1a1a1a</string>
       </dict>
     </dict>
     <dict>
@@ -37,7 +37,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#7A6480</string>
+        <string>#666666</string>
         <key>fontStyle</key>
         <string>italic</string>
       </dict>
@@ -50,7 +50,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FF3DA8</string>
+        <string>#C678DD</string>
         <key>fontStyle</key>
         <string>bold</string>
       </dict>
@@ -63,7 +63,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FFB347</string>
+        <string>#E5C07B</string>
       </dict>
     </dict>
     <dict>
@@ -74,7 +74,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FF6FB5</string>
+        <string>#D19A66</string>
       </dict>
     </dict>
     <dict>
@@ -85,7 +85,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#3DD8FF</string>
+        <string>#61AFEF</string>
       </dict>
     </dict>
     <dict>
@@ -96,7 +96,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FF3DA8</string>
+        <string>#C678DD</string>
         <key>fontStyle</key>
         <string>bold</string>
       </dict>
@@ -109,7 +109,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#F2E6F0</string>
+        <string>#D8D8D8</string>
       </dict>
     </dict>
     <dict>
@@ -120,7 +120,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FF6FB5</string>
+        <string>#56B6C2</string>
       </dict>
     </dict>
     <dict>
@@ -131,7 +131,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#3DD89A</string>
+        <string>#55D66B</string>
       </dict>
     </dict>
     <dict>
@@ -142,7 +142,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FF3D6B</string>
+        <string>#FF5555</string>
       </dict>
     </dict>
   </array>
