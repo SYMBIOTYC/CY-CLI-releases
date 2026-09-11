@@ -7,7 +7,7 @@
   <key>author</key>
   <string>SYMBIOTYC</string>
   <key>comment</key>
-  <string>Terminal-first AI coding agent palette from i52: pure black background, ANSI-like semantic colors, minimal chrome.</string>
+  <string>Matte muted terminal theme: near-black background, semi-transparent near-white text, very desaturated accents.</string>
   <key>semanticClass</key>
   <string>theme.dark.cy_prime</string>
   <key>settings</key>
@@ -16,17 +16,17 @@
       <key>settings</key>
       <dict>
         <key>background</key>
-        <string>#000000</string>
+        <string>#0b0b0d</string>
         <key>caret</key>
-        <string>#61AFEF</string>
+        <string>#8a6a78</string>
         <key>foreground</key>
-        <string>#D8D8D8</string>
+        <string>#eae8e6</string>
         <key>invisibles</key>
-        <string>#1a1a1a</string>
+        <string>#121214</string>
         <key>lineHighlight</key>
-        <string>#0a0a0a</string>
+        <string>#121214</string>
         <key>selection</key>
-        <string>#1a1a1a</string>
+        <string>#1f1f22</string>
       </dict>
     </dict>
     <dict>
@@ -37,7 +37,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#666666</string>
+        <string>#6c6c72</string>
         <key>fontStyle</key>
         <string>italic</string>
       </dict>
@@ -50,7 +50,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#C678DD</string>
+        <string>#8a7a96</string>
         <key>fontStyle</key>
         <string>bold</string>
       </dict>
@@ -63,7 +63,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#E5C07B</string>
+        <string>#a89880</string>
       </dict>
     </dict>
     <dict>
@@ -74,7 +74,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#D19A66</string>
+        <string>#a88080</string>
       </dict>
     </dict>
     <dict>
@@ -85,7 +85,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#61AFEF</string>
+        <string>#7a8a9a</string>
       </dict>
     </dict>
     <dict>
@@ -96,7 +96,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#C678DD</string>
+        <string>#8a7a96</string>
         <key>fontStyle</key>
         <string>bold</string>
       </dict>
@@ -109,7 +109,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#D8D8D8</string>
+        <string>#eae8e6</string>
       </dict>
     </dict>
     <dict>
@@ -120,7 +120,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#56B6C2</string>
+        <string>#8a6a78</string>
       </dict>
     </dict>
     <dict>
@@ -131,7 +131,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#55D66B</string>
+        <string>#7a9a88</string>
       </dict>
     </dict>
     <dict>
@@ -142,7 +142,7 @@
       <key>settings</key>
       <dict>
         <key>foreground</key>
-        <string>#FF5555</string>
+        <string>#9a7a7a</string>
       </dict>
     </dict>
   </array>
