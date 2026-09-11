@@ -47,80 +47,28 @@ if [ -z "$KEY" ]; then
   KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
 fi
 
+AUTH_SERVER="$APP_DIR/Resources/cy_auth_server.py"
+CY_VER="$("$CY_BIN" --version 2>/dev/null | awk '{print $2}')"
+[ -z "$CY_VER" ] && CY_VER="0.3.6"
+
+# NEED_AUTH=1 means: no key yet. The interactive Google sign-in (yes/no)
+# happens visibly inside the Terminal window (.command file below),
+# AFTER the CY splash — never headlessly here.
+NEED_AUTH=0
 if [ -z "$KEY" ]; then
-  # No key anywhere: start local auth server, open browser, wait for key
-  AUTH_SERVER="$APP_DIR/Resources/cy_auth_server.py"
-  if [ -f "$AUTH_SERVER" ]; then
-    cat <<'AUTH_MSG' >&2
-
-  ██████╗██╗   ██╗
- ██╔════╝╚██╗ ██╔╝
- ██║      ╚████╔╝
- ██║       ╚██╔╝
- ╚██████╗   ██║
-  ╚═════╝   ╚═╝
-
-  Запускаем авторизацию через Google...
-  Откроется браузер — войди через Google.
-  Ключ автоматически сохранится в ~/.cy/auth.json
-
-AUTH_MSG
-    # Start auth server and wait for key
-    python3 "$AUTH_SERVER" &
-    AUTH_PID=$!
-    # Wait up to 5 minutes for auth
-    wait $AUTH_PID 2>/dev/null || true
-    # Re-read key from auth.json
-    if [ -f "$AUTH_FILE" ]; then
-      KEY="$(python3 -c "
-import json, sys
-try:
-    with open('$AUTH_FILE') as f:
-        data = json.load(f)
-    v = data.get('cy_api_key') or data.get('CY_API_KEY') or ''
-    print(v if isinstance(v, str) else '')
-except Exception:
-    print('')
-" 2>/dev/null || true)"
-      KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
-    fi
-    if [ -z "$KEY" ]; then
-      cat <<'NO_KEY' >&2
-  Авторизация не завершена.
-  Попробуй снова:  cy login --with-api-key
-  Или:  export CY_API_KEY=cfat_...
-NO_KEY
-      exit 1
-    fi
-  else
-    # Fallback: open browser for manual flow
-    open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
-    cat <<'NO_KEY' >&2
-
-  ██████╗██╗   ██╗
- ██╔════╝╚██╗ ██╔╝
- ██║      ╚████╔╝
- ██║       ╚██╔╝
- ╚██████╗   ██║
-  ╚═════╝   ╚═╝
-
-  Тебе нужен API ключ.
-  Открыли страницу авторизации в браузере: https://auth.symbiotyc.workers.dev
-  1. Войди через Google — получишь ключ вида cfat_...
-  2. Сохрани его:  cy login --with-api-key
-     или:  export CY_API_KEY=cfat_...
-  3. Запусти CY заново.
-
-NO_KEY
-    exit 1
-  fi
+  NEED_AUTH=1
 fi
 
-# --- Write auth.json (overwrite empty one) ----------------------------------
-printf '{\n  "auth_mode": "apiKey",\n  "cy_api_key": "%s"\n}\n' "$KEY" > "$AUTH_FILE"
-chmod 600 "$AUTH_FILE"
+# --- Write auth.json (only when we already have a key) ----------------------
+if [ "$NEED_AUTH" = 0 ]; then
+  printf '{\n  "auth_mode": "apiKey",\n  "cy_api_key": "%s"\n}\n' "$KEY" > "$AUTH_FILE"
+  chmod 600 "$AUTH_FILE"
+fi
 
 # --- Start the local bridge if it is not already running -------------------
+# (Only headless-start it when we have a key; otherwise the .command file
+# starts it right after the interactive sign-in.)
+if [ "$NEED_AUTH" = 0 ]; then
 if ! bash -c "exec 3<>/dev/tcp/127.0.0.1/$PORT" 2>/dev/null; then
   PYTHON="$(command -v python3 || true)"
   if [ -z "$PYTHON" ]; then
@@ -139,6 +87,7 @@ if ! bash -c "exec 3<>/dev/tcp/127.0.0.1/$PORT" 2>/dev/null; then
     fi
     sleep 0.1
   done
+fi
 fi
 
 # --- Seed SYMBIOTYC-branded syntax themes on first launch ------------------
@@ -205,7 +154,7 @@ ${PINK}${BOLD}
  ╚██████╗   ██║
   ╚═════╝   ╚═╝${RESET}
 
-${PINK}${BOLD}CY${RESET}
+ ${PINK}${BOLD}CY${RESET} ${DIM}CLI v${CY_VER}${RESET}
 SPLASH_EOF
 
 # --- Install self-sufficient `cy` shim on PATH (no manual steps) ------------
@@ -219,6 +168,7 @@ cat > "$HOME/.local/bin/cy" <<'SHIM_EOF'
 APP="${CY_APP:-/Applications/CY CLI.app}"
 CY_BIN="$APP/Contents/MacOS/cy"
 BRIDGE="$APP/Contents/Resources/cy_bridge.py"
+AUTH_SERVER="$APP/Contents/Resources/cy_auth_server.py"
 if [ ! -x "$CY_BIN" ]; then
   echo "CY: app not found at $APP. Reinstall CY CLI." >&2
   exit 1
@@ -227,9 +177,8 @@ CY_HOME="${CY_HOME:-$HOME/.cy}"
 PORT="${CY_BRIDGE_PORT:-8790}"
 mkdir -p "$CY_HOME"
 AUTH_FILE="$CY_HOME/auth.json"
-KEY="${CY_API_KEY:-}"
-if [ -z "$KEY" ] && [ -f "$AUTH_FILE" ]; then
-  KEY="$(python3 -c "
+read_key() {
+  python3 -c "
 import json
 try:
     with open('$AUTH_FILE') as f:
@@ -238,13 +187,32 @@ try:
     print(v if isinstance(v, str) else '')
 except Exception:
     print('')
-" 2>/dev/null || true)"
-fi
-KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
+" 2>/dev/null || true
+}
+KEY="${CY_API_KEY:-}"
 if [ -z "$KEY" ]; then
-  open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
-  echo "CY: no API key. Sign in in the browser, then run: cy login --with-api-key" >&2
-  exit 1
+  KEY="$(read_key | tr -d '[:space:]')"
+fi
+if [ -z "$KEY" ]; then
+  if [ -t 0 ] && [ -f "$AUTH_SERVER" ]; then
+    printf 'CY is not signed in. Sign in with Google? [Y/n] '
+    read -r ANSWER
+    case "$ANSWER" in
+      [nN]*) echo "CY: sign-in skipped. Run 'cy' again when ready." >&2; exit 1 ;;
+    esac
+    echo "CY: opening browser — sign in with Google, the key saves automatically..."
+    python3 "$AUTH_SERVER"
+    KEY="$(read_key | tr -d '[:space:]')"
+    if [ -z "$KEY" ]; then
+      echo "CY: sign-in did not complete. Run 'cy' again to retry." >&2
+      exit 1
+    fi
+    echo "CY: signed in."
+  else
+    open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
+    echo "CY: no API key. Sign in in the browser, then run: cy login --with-api-key" >&2
+    exit 1
+  fi
 fi
 if ! bash -c "exec 3<>/dev/tcp/127.0.0.1/$PORT" 2>/dev/null; then
   PYTHON="$(command -v python3 || true)"
@@ -266,49 +234,122 @@ SHIM_EOF
 chmod +x "$HOME/.local/bin/cy"
 
 # --- Open Terminal with the splash, then the CLI ---------------------------
-export CX_HOME="$CY_HOME"
-export CODEX_HOME="$CY_HOME"
-export CY_API_KEY="$KEY"
-
-# Write a .command file that Terminal can execute directly.
-# This avoids the need for AppleScript Automation permissions.
+# NOTE: heredoc below is UNQUOTED on purpose — absolute paths are baked in
+# at launcher time, because Terminal.app does not inherit our environment.
+# Every runtime `$` is escaped as `\$`.
 CMD_FILE="$CY_HOME/.cy_launch.command"
-cat > "$CMD_FILE" <<'CMD_EOF'
+cat > "$CMD_FILE" <<CMD_EOF
 #!/bin/bash
-export CX_HOME='$CY_HOME'
-export CODEX_HOME='$CY_HOME'
-export CY_API_KEY='$KEY'
+CY_BIN="$CY_BIN"
+BRIDGE="$BRIDGE"
+AUTH_SERVER="$AUTH_SERVER"
+CY_HOME="$CY_HOME"
+AUTH_FILE="$AUTH_FILE"
+PORT="$PORT"
+SPLASH_FILE="$SPLASH_FILE"
+CMD_FILE="$CMD_FILE"
+export CX_HOME="\$CY_HOME"
+export CODEX_HOME="\$CY_HOME"
 export PS1='\$ '
-export PROMPT_EOL=''
 clear
-cat '$SPLASH_FILE'
+cat "\$SPLASH_FILE"
+echo ""
+
+read_key() {
+  python3 -c "
+import json
+try:
+    with open(\"\$AUTH_FILE\") as f:
+        data = json.load(f)
+    v = data.get('cy_api_key') or data.get('CY_API_KEY') or ''
+    print(v if isinstance(v, str) else '')
+except Exception:
+    print('')
+" 2>/dev/null || true
+}
+
+# --- Interactive Google sign-in (only when no key yet) ---
+KEY="\$(read_key | tr -d '[:space:]')"
+if [ -z "\$KEY" ]; then
+  printf '  Sign in with Google? [Y/n] '
+  read -r ANSWER
+  case "\$ANSWER" in
+    [nN]*)
+      echo ""
+      echo "  CY needs an API key to work. Launch the app again when ready."
+      read -r -p "  Press Enter to close... " _
+      rm -f "\$SPLASH_FILE" "\$CMD_FILE"
+      exit 1
+      ;;
+  esac
+  echo ""
+  echo "  Opening browser — sign in with Google, the key saves automatically..."
+  python3 "\$AUTH_SERVER"
+  KEY="\$(read_key | tr -d '[:space:]')"
+  if [ -z "\$KEY" ]; then
+    echo ""
+    echo "  Sign-in did not complete. Launch the app again to retry."
+    read -r -p "  Press Enter to close... " _
+    rm -f "\$SPLASH_FILE" "\$CMD_FILE"
+    exit 1
+  fi
+  python3 -c "
+import json
+p = \"\$AUTH_FILE\"
+try:
+    d = json.load(open(p))
+except Exception:
+    d = {}
+k = d.get('cy_api_key') or d.get('CY_API_KEY') or ''
+d.update({'auth_mode': 'apiKey', 'cy_api_key': k, 'CY_API_KEY': k})
+json.dump(d, open(p, 'w'), indent=2)
+" 2>/dev/null || true
+  chmod 600 "\$AUTH_FILE" 2>/dev/null || true
+  echo "  Signed in. Starting CY..."
+  sleep 1
+fi
+export CY_API_KEY="\$KEY"
+
+# --- Start the bridge if the launcher did not (no key at launch time) ---
+if ! bash -c "exec 3<>/dev/tcp/127.0.0.1/\$PORT" 2>/dev/null; then
+  CY_API_BASE_URL="https://cy.symbiotyc.workers.dev/v1" \\
+  CY_BRIDGE_PORT="\$PORT" \\
+  CY_HOME="\$CY_HOME" \\
+  CY_API_KEY="\$KEY" \\
+  nohup python3 "\$BRIDGE" >"\$CY_HOME/bridge.log" 2>&1 &
+  disown 2>/dev/null || true
+  for _ in \$(seq 1 50); do
+    bash -c "exec 3<>/dev/tcp/127.0.0.1/\$PORT" 2>/dev/null && break
+    sleep 0.1
+  done
+fi
 
 # Shake animation: slight jitter on the CY logo
-ESC=$'\033'
-for i in $(seq 1 8); do
-  OFFSET=$((RANDOM % 3 - 1))
-  if [ "$OFFSET" -gt 0 ]; then
-    printf "${ESC}[1;35m${ESC}[1B${ESC}[%dC" "$OFFSET"
-  elif [ "$OFFSET" -lt 0 ]; then
-    printf "${ESC}[1;35m${ESC}[1B${ESC}[%dD" "$((-OFFSET))"
+ESC=\$'\033'
+for i in \$(seq 1 8); do
+  OFFSET=\$((RANDOM % 3 - 1))
+  if [ "\$OFFSET" -gt 0 ]; then
+    printf "\${ESC}[1;35m\${ESC}[1B\${ESC}[%dC" "\$OFFSET"
+  elif [ "\$OFFSET" -lt 0 ]; then
+    printf "\${ESC}[1;35m\${ESC}[1B\${ESC}[%dD" "\$((-OFFSET))"
   fi
   sleep 0.15
-  printf "${ESC}[0m${ESC}[1A"
+  printf "\${ESC}[0m\${ESC}[1A"
   sleep 0.08
 done
 
 # Random click sounds at startup
-for i in $(seq 1 2); do
-  SLEEP_TIME=$(( (RANDOM % 3) + 1 ))
-  sleep "$SLEEP_TIME"
+for i in \$(seq 1 2); do
+  SLEEP_TIME=\$(( (RANDOM % 3) + 1 ))
+  sleep "\$SLEEP_TIME"
   printf '\a'
 done
 
-# Wait a bit then launch TUI
+# Launch TUI, then clean up
 sleep 1
-cd '$HOME' && '$CY_BIN'
-rm -f '$SPLASH_FILE'
-rm -f '$CMD_FILE'
+cd "\$HOME" && "\$CY_BIN"
+rm -f "\$SPLASH_FILE"
+rm -f "\$CMD_FILE"
 CMD_EOF
 chmod +x "$CMD_FILE"
 
