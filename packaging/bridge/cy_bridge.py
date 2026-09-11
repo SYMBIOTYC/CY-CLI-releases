@@ -775,6 +775,52 @@ class H(http.server.BaseHTTPRequestHandler):
             except Exception:
                 return
 
+    def _sse_open(self, rid, msg_id, model):
+        """Send Response SSE header events. Returns False if client disconnected."""
+        try:
+            self.wfile.write(f"event: response.created\ndata: {json.dumps({'type':'response.created','response':{'id':rid,'object':'response','created_at':int(time.time()),'model':model,'status':'in_progress'}})}\n\n".encode())
+            self.wfile.flush()
+            self.wfile.write(f"event: response.in_progress\ndata: {json.dumps({'type':'response.in_progress','response':{'id':rid,'object':'response','created_at':int(time.time()),'model':model,'status':'in_progress'}})}\n\n".encode())
+            self.wfile.flush()
+            self.wfile.write(f"event: response.output_item.added\ndata: {json.dumps({'type':'response.output_item.added','output_index':0,'item':{'id':msg_id,'type':'message','role':'assistant','status':'in_progress','content':[]}})}\n\n".encode())
+            self.wfile.flush()
+            self.wfile.write(f"event: response.content_part.added\ndata: {json.dumps({'type':'response.content_part.added','item_id':msg_id,'output_index':0,'content_index':0,'part':{'type':'output_text','text':'','annotations':[]}})}\n\n".encode())
+            self.wfile.flush()
+            return True
+        except Exception:
+            return False
+
+    def _sse_chunk(self, msg_id, text):
+        """Stream one text delta within an open Response SSE."""
+        try:
+            self.wfile.write(f"event: response.output_text.delta\ndata: {json.dumps({'type':'response.output_text.delta','item_id':msg_id,'output_index':0,'content_index':0,'delta':text})}\n\n".encode())
+            self.wfile.flush()
+            return True
+        except Exception:
+            return False
+
+    def _sse_close(self, rid, msg_id, final_text, model, usage):
+        """Send Response SSE footer events."""
+        try:
+            self.wfile.write(f"event: response.output_text.done\ndata: {json.dumps({'type':'response.output_text.done','item_id':msg_id,'output_index':0,'content_index':0,'text':final_text})}\n\n".encode())
+            self.wfile.flush()
+            self.wfile.write(f"event: response.content_part.done\ndata: {json.dumps({'type':'response.content_part.done','item_id':msg_id,'output_index':0,'content_index':0,'part':{'type':'output_text','text':final_text,'annotations':[]}})}\n\n".encode())
+            self.wfile.flush()
+            self.wfile.write(f"event: response.output_item.done\ndata: {json.dumps({'type':'response.output_item.done','output_index':0,'item':{'id':msg_id,'type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':final_text,'annotations':[]}]}})}\n\n".encode())
+            self.wfile.flush()
+            out_usage = None
+            if usage:
+                out_usage = {
+                    "input_tokens": usage.get("prompt_tokens", 0),
+                    "output_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                }
+            self.wfile.write(f"event: response.completed\ndata: {json.dumps({'type':'response.completed','response':{'id':rid,'object':'response','created_at':int(time.time()),'model':model,'status':'completed','output':[{'id':msg_id,'type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':final_text,'annotations':[]}]}],'usage':out_usage}})}\n\n".encode())
+            self.wfile.flush()
+            return True
+        except Exception:
+            return False
+
     def do_GET(self):
         if "websocket" in self.headers.get("Upgrade", "").lower() or "Upgrade" in self.headers:
             self.send_response(101)
@@ -868,6 +914,16 @@ class H(http.server.BaseHTTPRequestHandler):
         upstream_model = model
         final_usage = {}
 
+        rid = f"resp_{int(time.time()*1000)}"
+        msg_id = f"msg_{rid}"
+        sse_open = False
+        try:
+            self._open_sse()
+            sse_open = True
+            sse_open = self._sse_open(rid, msg_id, model)
+        except Exception:
+            sse_open = False
+
         try:
             seen_tool_keys = {}
             last_text_with_content = ""
@@ -943,6 +999,14 @@ class H(http.server.BaseHTTPRequestHandler):
                     final_text = "CY: stopped repeating the same action — please rephrase or narrow the request."
                     break
 
+                # Announce tool calls so the TUI shows activity during execution.
+                if sse_open:
+                    for tc in tool_calls:
+                        args_str = tc.get("arguments") or ""
+                        if len(args_str) > 200:
+                            args_str = args_str[:200] + "…"
+                        self._sse_chunk(msg_id, f"→ {tc['name']}({args_str})\n")
+
                 # Tool-use round: execute each tool and append results in order.
                 # Same-host browser_fetch bursts run sequentially with a gap
                 # (parallel curls to one host trigger WAF 429); others parallel.
@@ -999,6 +1063,16 @@ class H(http.server.BaseHTTPRequestHandler):
                         "tool_call_id": tc["id"],
                         "content": output_str,
                     })
+                # Stream tool execution progress so the TUI shows activity.
+                if sse_open:
+                    for tc, tool_result in zip(tool_calls, ordered):
+                        try:
+                            result_text = json.dumps(tool_result, ensure_ascii=False)
+                        except Exception:
+                            result_text = str(tool_result)
+                        if len(result_text) > 2000:
+                            result_text = result_text[:2000] + f"\n…[truncated {len(result_text)-2000}]"
+                        self._sse_chunk(msg_id, result_text + "\n")
                 # Prune old tool messages to bound context.
                 if len(messages) > 20:
                     for m in messages[1:-10]:
@@ -1051,41 +1125,13 @@ class H(http.server.BaseHTTPRequestHandler):
             log.info("no usage block returned (model=%s, %.2fs)",
                      upstream_model, time.time() - t_start)
 
-        # Stream a single Responses SSE response containing only the final text.
-        self._open_sse()
-        rid = f"resp_{int(time.time()*1000)}"
-        msg_id = f"msg_{rid}"
-        try:
-            self.wfile.write(f"event: response.created\ndata: {json.dumps({'type':'response.created','response':{'id':rid,'object':'response','created_at':int(time.time()),'model':upstream_model,'status':'in_progress'}})}\n\n".encode())
-            self.wfile.flush()
-            self.wfile.write(f"event: response.in_progress\ndata: {json.dumps({'type':'response.in_progress','response':{'id':rid,'object':'response','created_at':int(time.time()),'model':upstream_model,'status':'in_progress'}})}\n\n".encode())
-            self.wfile.flush()
-            self.wfile.write(f"event: response.output_item.added\ndata: {json.dumps({'type':'response.output_item.added','output_index':0,'item':{'id':msg_id,'type':'message','role':'assistant','status':'in_progress','content':[]}})}\n\n".encode())
-            self.wfile.flush()
-            self.wfile.write(f"event: response.content_part.added\ndata: {json.dumps({'type':'response.content_part.added','item_id':msg_id,'output_index':0,'content_index':0,'part':{'type':'output_text','text':'','annotations':[]}})}\n\n".encode())
-            self.wfile.flush()
+        # Stream final answer within the already-open Response SSE.
+        if sse_open:
             chunk_size = 64
             for i in range(0, len(final_text), chunk_size):
                 chunk = final_text[i:i + chunk_size]
-                self.wfile.write(f"event: response.output_text.delta\ndata: {json.dumps({'type':'response.output_text.delta','item_id':msg_id,'output_index':0,'content_index':0,'delta':chunk})}\n\n".encode())
-                self.wfile.flush()
-            self.wfile.write(f"event: response.output_text.done\ndata: {json.dumps({'type':'response.output_text.done','item_id':msg_id,'output_index':0,'content_index':0,'text':final_text})}\n\n".encode())
-            self.wfile.flush()
-            self.wfile.write(f"event: response.content_part.done\ndata: {json.dumps({'type':'response.content_part.done','item_id':msg_id,'output_index':0,'content_index':0,'part':{'type':'output_text','text':final_text,'annotations':[]}})}\n\n".encode())
-            self.wfile.flush()
-            self.wfile.write(f"event: response.output_item.done\ndata: {json.dumps({'type':'response.output_item.done','output_index':0,'item':{'id':msg_id,'type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':final_text,'annotations':[]}]}})}\n\n".encode())
-            self.wfile.flush()
-            out_usage = None
-            if final_usage:
-                out_usage = {
-                    "input_tokens": final_usage.get("prompt_tokens", 0),
-                    "output_tokens": final_usage.get("completion_tokens", 0),
-                    "total_tokens": final_usage.get("total_tokens", 0),
-                }
-            self.wfile.write(f"event: response.completed\ndata: {json.dumps({'type':'response.completed','response':{'id':rid,'object':'response','created_at':int(time.time()),'model':upstream_model,'status':'completed','output':[{'id':msg_id,'type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':final_text,'annotations':[]}]}],'usage':out_usage}})}\n\n".encode())
-            self.wfile.flush()
-        except Exception:
-            pass
+                self._sse_chunk(msg_id, chunk)
+            self._sse_close(rid, msg_id, final_text, upstream_model, final_usage)
 
 
 if __name__ == "__main__":
