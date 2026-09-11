@@ -154,6 +154,16 @@ download_and_install() {
     tar xzf "${output}" -C "${tmpdir}"
     cp "${tmpdir}/cy" "${CY_BIN_DIR}/cy"
     chmod +x "${CY_BIN_DIR}/cy"
+    for asset in launch-cy.sh cy_bridge.py cy_auth_server.py; do
+      if [ -f "${tmpdir}/${asset}" ]; then
+        cp "${tmpdir}/${asset}" "${CY_INSTALL_DIR}/${asset}"
+      fi
+    done
+    if [ -d "${tmpdir}/themes" ]; then
+      mkdir -p "${CY_INSTALL_DIR}/themes"
+      cp "${tmpdir}/themes/"*.tmTheme "${CY_INSTALL_DIR}/themes/" 2>/dev/null || true
+    fi
+    chmod +x "${CY_INSTALL_DIR}/launch-cy.sh" 2>/dev/null || true
   else
     unzip -q "${output}" -d "${tmpdir}"
     cp "${tmpdir}/cy.exe" "${CY_BIN_DIR}/cy.exe"
@@ -246,6 +256,16 @@ install_initial_binary() {
   tar xzf "$tmpdir/$asset_file" -C "$tmpdir"
   cp "$tmpdir/cy" "${CY_STORE_DIR}/bin/cy"
   chmod +x "${CY_STORE_DIR}/bin/cy"
+  for asset in launch-cy.sh cy_bridge.py cy_auth_server.py; do
+    if [ -f "$tmpdir/$asset" ]; then
+      cp "$tmpdir/$asset" "${CY_STORE_DIR}/$asset"
+    fi
+  done
+  if [ -d "$tmpdir/themes" ]; then
+    mkdir -p "${CY_STORE_DIR}/themes"
+    cp "$tmpdir/themes/"*.tmTheme "${CY_STORE_DIR}/themes/" 2>/dev/null || true
+  fi
+  chmod +x "${CY_STORE_DIR}/launch-cy.sh" 2>/dev/null || true
   
   echo "${tag#v}" > "${CY_STORE_DIR}/VERSION"
 }

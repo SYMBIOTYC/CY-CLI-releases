@@ -7,6 +7,7 @@ param(
     [string]$InstallerName = 'CY-CLI-x86_64-setup.exe',
     [string]$LauncherPath = '',
     [string]$BridgePath = '',
+    [string]$AuthServerPath = '',
     [string]$ThemesDir = ''
 )
 
@@ -24,6 +25,7 @@ Copy-Item $WrapperPath (Join-Path $OutDir 'cy-wrapper.ps1') -Force
 # Optional parity assets (launcher + local bridge + branded themes).
 if ($LauncherPath -and (Test-Path $LauncherPath)) { Copy-Item $LauncherPath (Join-Path $OutDir 'launch-cy.ps1') -Force }
 if ($BridgePath -and (Test-Path $BridgePath)) { Copy-Item $BridgePath (Join-Path $OutDir 'cy_bridge.py') -Force }
+if ($AuthServerPath -and (Test-Path $AuthServerPath)) { Copy-Item $AuthServerPath (Join-Path $OutDir 'cy_auth_server.py') -Force }
 if ($ThemesDir -and (Test-Path $ThemesDir)) {
     $ThemesOut = Join-Path $OutDir 'themes'
     New-Item -ItemType Directory -Force -Path $ThemesOut | Out-Null
@@ -32,6 +34,7 @@ if ($ThemesDir -and (Test-Path $ThemesDir)) {
 $extraFiles = ''
 if ($LauncherPath -and (Test-Path (Join-Path $OutDir 'launch-cy.ps1'))) { $extraFiles += "Source: ""launch-cy.ps1""; DestDir: ""{app}""; Flags: ignoreversion`r`n" }
 if ($BridgePath -and (Test-Path (Join-Path $OutDir 'cy_bridge.py'))) { $extraFiles += "Source: ""cy_bridge.py""; DestDir: ""{app}""; Flags: ignoreversion`r`n" }
+if ($AuthServerPath -and (Test-Path (Join-Path $OutDir 'cy_auth_server.py'))) { $extraFiles += "Source: ""cy_auth_server.py""; DestDir: ""{app}""; Flags: ignoreversion`r`n" }
 if ($ThemesDir -and (Test-Path (Join-Path $OutDir 'themes\*.tmTheme'))) { $extraFiles += "Source: ""themes\*.tmTheme""; DestDir: ""{app}\themes""; Flags: ignoreversion`r`n" }
 
 @"
@@ -45,7 +48,7 @@ $iss = @"
 #define MyAppVersion "$Version"
 #define MyAppPublisher "SYMBIOTYC"
 #define MyAppURL "https://github.com/SYMBIOTYC/CY-CLI-releases"
-#define MyAppExeName "cy-wrapper.ps1"
+#define MyAppExeName "launch-cy.ps1"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -82,13 +85,13 @@ Source: "cy-wrapper.ps1"; DestDir: "{app}"; Flags: ignoreversion
 $extraFiles
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"
+Name: "{group}\{#MyAppName}"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\launch-cy.ps1"""; Comment: "CY-CLI"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"; Comment: "CY-CLI Self-Updating Wrapper"
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\cy-wrapper.ps1"; Tasks: desktopicon
+Name: "{autostartup}\{#MyAppName}"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\launch-cy.ps1"""; Comment: "CY-CLI"
+Name: "{commondesktop}\{#MyAppName}"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\launch-cy.ps1"""; Tasks: desktopicon; Comment: "CY-CLI"
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\cy-wrapper.ps1"" --version"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\launch-cy.ps1"" --version"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Flags: preservestringtype; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}'))

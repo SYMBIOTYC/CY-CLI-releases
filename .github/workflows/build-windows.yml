@@ -140,9 +140,12 @@ jobs:
           cp "$BIN" cy.exe
           mkdir -p zip-stage/themes
           cp cy.exe zip-stage/
-          cp release-repo/tools/launch-cy.ps1 zip-stage/ 2>/dev/null || echo "WARN: launch-cy.ps1 missing"
-          cp release-repo/packaging/bridge/cy_bridge.py zip-stage/ 2>/dev/null || echo "WARN: cy_bridge.py missing"
-          cp release-repo/packaging/themes/*.tmTheme zip-stage/themes/ 2>/dev/null || echo "WARN: themes missing"
+          cp release-repo/tools/launch-cy.ps1 zip-stage/
+          cp release-repo/packaging/bridge/cy_bridge.py zip-stage/
+          cp release-repo/packaging/bridge/cy_auth_server.py zip-stage/
+          cp release-repo/packaging/themes/*.tmTheme zip-stage/themes/
+          test -f zip-stage/cy_auth_server.py
+          test -d zip-stage/themes
           powershell Compress-Archive -Path 'zip-stage/*' -DestinationPath cy-x86_64-pc-windows-msvc.zip
           powershell -Command "Get-FileHash -Algorithm SHA256 cy-x86_64-pc-windows-msvc.zip | Select-Object -ExpandProperty Hash | Set-Content -Encoding ASCII -NoNewline -Path cy-x86_64-pc-windows-msvc.zip.sha256"
 
@@ -162,6 +165,7 @@ jobs:
             -Version $VERSION `
             -LauncherPath "${{ github.workspace }}\release-repo\tools\launch-cy.ps1" `
             -BridgePath "${{ github.workspace }}\release-repo\packaging\bridge\cy_bridge.py" `
+            -AuthServerPath "${{ github.workspace }}\release-repo\packaging\bridge\cy_auth_server.py" `
             -ThemesDir "${{ github.workspace }}\release-repo\packaging\themes" `
             -OutDir "${{ github.workspace }}"
         timeout-minutes: 30

@@ -1,62 +1,51 @@
-# CY-CLI Windows launcher (parity with packaging/macos/launcher).
-#
-#   1. Resolves a CY API key (ENV, %USERPROFILE%\.cy\auth.json — cyclic field
-#      search CY_API_KEY|openai_api_key|OPENAI_API_KEY|api_key|API_KEY) and
-#      writes it to auth.json so the `cy` CLI can authenticate.
-#   2. Starts the local responses->chat bridge (pythonw/python, port 8790) if
-#      it is not already running. The bridge also serves GET /v1/models and
-#      HEAD for reachability checks.
-#   3. Writes %USERPROFILE%\.cy\config.toml with base_url=http://127.0.0.1:8790/v1.
-#   4. Opens a terminal (wt.exe, else cmd /k) running a wrapper .cmd that shows
-#      the big pink CY splash, then runs `cy` in a real TTY with CY_API_KEY set.
-
 $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$AssetDir = if ($env:CY_ASSET_DIR) { $env:CY_ASSET_DIR } else { $ScriptDir }
 $CyHome = if ($env:CY_HOME) { $env:CY_HOME } else { Join-Path $env:USERPROFILE '.cy' }
-$Port = if ($env:CY_BRIDGE_PORT) { $env:CY_BRIDGE_PORT } else { '8790' }
+$Port = if ($env:CY_BRIDGE_PORT) { [int]$env:CY_BRIDGE_PORT } else { 8790 }
 New-Item -ItemType Directory -Force -Path $CyHome | Out-Null
 
 $AuthFile = Join-Path $CyHome 'auth.json'
 $Config = Join-Path $CyHome 'config.toml'
 
-$KeyFields = @('CY_API_KEY', 'openai_api_key', 'OPENAI_API_KEY', 'api_key', 'API_KEY')
-
-# --- Resolve the cy binary ---------------------------------------------------
 function Find-CyBin {
     $candidates = @(
-        (Join-Path $ScriptDir 'cy.exe'),
-        (Join-Path $ScriptDir 'bin\cy.exe'),
+        (Join-Path $AssetDir 'cy.exe'),
+        (Join-Path $AssetDir 'bin\cy.exe'),
         (Join-Path $env:USERPROFILE '.local\share\cy\bin\cy.exe')
     )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { return $c }
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { return $candidate }
     }
     foreach ($name in @('cy.exe', 'cy')) {
-        $cmd = Get-Command $name -ErrorAction SilentlyContinue
-        if ($cmd) { return $cmd.Source }
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) { return $command.Source }
     }
     return $null
 }
 
-# --- Resolve the bridge script ------------------------------------------------
-function Find-Bridge {
+function Find-Script {
+    param([string]$Name)
+
     $candidates = @(
-        (Join-Path $ScriptDir 'cy_bridge.py'),
-        (Join-Path $ScriptDir '..\packaging\bridge\cy_bridge.py'),
-        (Join-Path $ScriptDir '..\packaging\macos\cy_bridge.py')
+        (Join-Path $AssetDir $Name),
+        (Join-Path $ScriptDir $Name),
+        (Join-Path $ScriptDir "..\packaging\bridge\$Name"),
+        (Join-Path $ScriptDir "..\packaging\macos\$Name")
     )
-    foreach ($b in $candidates) {
-        if (Test-Path $b) { return (Resolve-Path $b).Path }
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { return (Resolve-Path $candidate).Path }
     }
     return $null
 }
 
-function Test-CyPort {
-    param([int]$P)
+function Test-Port {
+    param([int]$Number)
+
     try {
         $client = New-Object System.Net.Sockets.TcpClient
-        $client.Connect('127.0.0.1', $P)
+        $client.Connect('127.0.0.1', $Number)
         $client.Close()
         return $true
     } catch {
@@ -64,128 +53,117 @@ function Test-CyPort {
     }
 }
 
+function Read-CyKey {
+    if ($env:CY_API_KEY -and $env:CY_API_KEY.Trim()) {
+        return $env:CY_API_KEY.Trim()
+    }
+    if (-not (Test-Path $AuthFile)) {
+        return $null
+    }
+    try {
+        $data = Get-Content $AuthFile -Raw | ConvertFrom-Json
+        foreach ($field in @('cy_api_key', 'CY_API_KEY')) {
+            $value = $data.$field
+            if ($value -is [string] -and $value.Trim()) {
+                return $value.Trim()
+            }
+        }
+    } catch { }
+    return $null
+}
+
+function Write-CyAuth {
+    param([string]$Key)
+
+    $data = if (Test-Path $AuthFile) {
+        try { Get-Content $AuthFile -Raw | ConvertFrom-Json } catch { [ordered]@{} }
+    } else {
+        [ordered]@{}
+    }
+    if ($null -eq $data -or $data -isnot [pscustomobject]) {
+        $data = [ordered]@{}
+    }
+    $data.auth_mode = 'apiKey'
+    $data.cy_api_key = $Key
+    $data.CY_API_KEY = $Key
+    $data | ConvertTo-Json -Depth 10 | Set-Content -Path $AuthFile -Encoding UTF8
+}
+
+function Find-Python {
+    foreach ($name in @('python.exe', 'python3.exe', 'py.exe')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) { return $command.Source }
+    }
+    return $null
+}
+
+function Start-CyBridge {
+    param([string]$Key)
+
+    if (Test-Port $Port) { return }
+    if (-not $Bridge) { Write-Error 'CY: cy_bridge.py not found.' }
+    $python = Find-Python
+    if (-not $python) { Write-Error 'CY: python.exe, python3.exe, or py.exe not found.' }
+
+    $env:CY_API_BASE_URL = if ($env:CY_API_BASE_URL) { $env:CY_API_BASE_URL } else { 'https://cy.symbiotyc.workers.dev/v1' }
+    $env:CY_BRIDGE_PORT = "$Port"
+    $env:CY_HOME = $CyHome
+    $env:CY_API_KEY = $Key
+
+    $bridgeArgs = @()
+    if ((Split-Path -Leaf $python) -eq 'py.exe') { $bridgeArgs += '-3' }
+    $bridgeArgs += $Bridge
+    Start-Process -FilePath $python -ArgumentList $bridgeArgs -WindowStyle Hidden
+    for ($i = 0; $i -lt 50; $i++) {
+        if (Test-Port $Port) { return }
+        Start-Sleep -Milliseconds 100
+    }
+    Write-Error "CY: bridge did not become ready on port $Port."
+}
+
 $CyBin = Find-CyBin
 if (-not $CyBin) {
     Write-Host 'CY: cy.exe not found. Run the install script first.' -ForegroundColor Red
     exit 1
 }
-$Bridge = Find-Bridge
-
-# --- Resolve the API key (ENV first, cyclic field order) ------------------------
-$Key = ''
-foreach ($name in $KeyFields) {
-    $v = [Environment]::GetEnvironmentVariable($name)
-    if ($v -and $v.Trim()) { $Key = $v.Trim(); break }
+if ($args.Count -gt 0 -and $args[0] -in @('--version', '-V', '--help', '-h')) {
+    & $CyBin @args
+    exit $LASTEXITCODE
 }
-if (-not $Key -and (Test-Path $AuthFile)) {
-    try {
-        $data = Get-Content $AuthFile -Raw | ConvertFrom-Json
-        foreach ($name in $KeyFields) {
-            $v = $data.$name
-            if ($v -is [string] -and $v.Trim()) { $Key = $v.Trim(); break }
-        }
-    } catch { }
+$Bridge = Find-Script 'cy_bridge.py'
+$AuthServer = Find-Script 'cy_auth_server.py'
+$Key = Read-CyKey
+if ($Key) {
+    Write-CyAuth $Key
+    $env:CY_API_KEY = $Key
+    Start-CyBridge $Key
 }
 
-if (-not $Key) {
-    # No key anywhere: open the CY authorization page in the browser and surface
-    # a branded, readable message (CY Engine v2 phrase).
-    Start-Process 'https://auth.symbiotyc.workers.dev' -ErrorAction SilentlyContinue
-    $esc = [string][char]27
-    Write-Host ''
-    Write-Host "  ${esc}[1;35m██████╗██╗   ██╗${esc}[0m"
-    Write-Host " ${esc}[1;35m██╔════╝╚██╗ ██╔╝${esc}[0m"
-    Write-Host " ${esc}[1;35m██║      ╚████╔╝ ${esc}[0m"
-    Write-Host " ${esc}[1;35m██║       ╚██╔╝  ${esc}[0m"
-    Write-Host " ${esc}[1;35m╚██████╗   ██║   ${esc}[0m"
-    Write-Host "  ${esc}[1;35m╚═════╝   ╚═╝${esc}[0m"
-    Write-Host ''
-    Write-Host '  Тебе нужен API ключ.'
-    Write-Host '  Открыли страницу авторизации в браузере: https://auth.symbiotyc.workers.dev'
-    Write-Host '  1. Войди через Google — получишь ключ вида cfat_...'
-    Write-Host '  2. Сохрани его:  cy login --with-api-key'
-    Write-Host '     или:  setx CY_API_KEY cfat_...'
-    Write-Host '  3. Запусти CY заново.'
-    Write-Host ''
-    exit 1
-}
-
-# --- Write auth.json (overwrite empty one) ----------------------------------------
-[pscustomobject]@{
-    auth_mode      = 'apiKey'
-    openai_api_key = $Key
-} | ConvertTo-Json | Set-Content -Path $AuthFile -Encoding ASCII
-
-# --- Start the local bridge if it is not already running --------------------------
-if (-not (Test-CyPort ([int]$Port))) {
-    if (-not $Bridge) {
-        Write-Host 'CY: cy_bridge.py not found; continuing without local bridge.' -ForegroundColor Yellow
-    } else {
-        $Python = $null
-        foreach ($p in @('pythonw.exe', 'python3.exe', 'python.exe')) {
-            $cmd = Get-Command $p -ErrorAction SilentlyContinue
-            if ($cmd) { $Python = $cmd.Source; break }
-        }
-        if (-not $Python) {
-            $cmd = Get-Command 'py.exe' -ErrorAction SilentlyContinue
-            if ($cmd) { $Python = $cmd.Source }
-        }
-        if (-not $Python) {
-            Write-Host 'CY: python not found. Install Python 3 and try again.' -ForegroundColor Red
-            exit 1
-        }
-        if (-not $env:CY_API_BASE_URL) { $env:CY_API_BASE_URL = 'https://cy.symbiotyc.workers.dev/v1' }
-        $env:CY_BRIDGE_PORT = "$Port"
-        $env:CY_HOME = $CyHome
-        $env:CY_API_KEY = $Key
-        $bridgeArgs = "`"$Bridge`""
-        if ((Split-Path -Leaf $Python) -eq 'py.exe') { $bridgeArgs = "-3 `"$Bridge`"" }
-        Start-Process -FilePath $Python -ArgumentList $bridgeArgs -WindowStyle Hidden
-        for ($i = 0; $i -lt 50; $i++) {
-            if (Test-CyPort ([int]$Port)) { break }
-            Start-Sleep -Milliseconds 100
-        }
-    }
-}
-
-# --- Seed SYMBIOTYC-branded syntax themes on first launch --------------------------
-$ThemesSrc = Join-Path $ScriptDir 'themes'
-if (Test-Path $ThemesSrc) {
-    $ThemesDst = Join-Path $CyHome 'themes'
-    New-Item -ItemType Directory -Force -Path $ThemesDst | Out-Null
-    Get-ChildItem -Path (Join-Path $ThemesSrc '*.tmTheme') -ErrorAction SilentlyContinue | ForEach-Object {
-        $dst = Join-Path $ThemesDst $_.Name
-        if (-not (Test-Path $dst)) { Copy-Item $_.FullName $dst }
-    }
-}
-
-# --- Config (always written to ensure correct port) ---------------------------------
 @"
 # CY Config - generated by CY-CLI launcher
 model = "cy/i1a"
-model_provider = "symbiotyc"
+model_provider = "cy"
 model_context_window = 128000
 model_auto_compact_token_limit = 96000
 model_reasoning_summary = "auto"
 model_reasoning_effort = "none"
 approval_policy = "never"
+"@ | Set-Content -Path $Config -Encoding UTF8
 
-[model_providers.symbiotyc]
-name = "SYMBIOTYC"
-base_url = "http://127.0.0.1:$Port/v1"
-wire_api = "responses"
-supports_websockets = false
-models = ["cy/i1a"]
-"@ | Set-Content -Path $Config -Encoding ASCII
+$ThemesSrc = Join-Path $AssetDir 'themes'
+if (Test-Path $ThemesSrc) {
+    $ThemesDst = Join-Path $CyHome 'themes'
+    New-Item -ItemType Directory -Force -Path $ThemesDst | Out-Null
+    Get-ChildItem -Path (Join-Path $ThemesSrc '*.tmTheme') -ErrorAction SilentlyContinue | ForEach-Object {
+        $destination = Join-Path $ThemesDst $_.Name
+        if (-not (Test-Path $destination)) { Copy-Item $_.FullName $destination }
+    }
+}
 
-# --- Build the first-screen splash (big pink CY ASCII art) ----------------------------
-#   1;35 = bold magenta (pink), 0 = reset, 1;36 = bold cyan, 2;37 = dim grey.
 $esc = [string][char]27
 $PINK = "${esc}[1;35m"
-$CYAN = "${esc}[1;36m"
 $DIM = "${esc}[2;37m"
 $RESET = "${esc}[0m"
-
 $SplashFile = Join-Path $CyHome '.splash.ansi'
 $splash = @"
 ${PINK}
@@ -196,32 +174,165 @@ ${PINK}
  ╚██████╗   ██║
   ╚═════╝   ╚═╝${RESET}
 
- ${PINK}CY${RESET} ${DIM}— Symbiotic Coding Assistant${RESET}
+ ${PINK}CY${RESET} ${DIM}CLI${RESET}
  ${DIM}Loading TUI...${RESET}
 "@
-[IO.File]::WriteAllText($SplashFile, $splash)
+[IO.File]::WriteAllText($SplashFile, $splash, [Text.Encoding]::UTF8)
 
-# --- Wrapper .cmd executed inside the terminal window ----------------------------------
-$CmdFile = Join-Path $CyHome '.cy_launch.cmd'
-$cmdBody = @"
-@echo off
-set "CX_HOME=$CyHome"
-set "CODEX_HOME=$CyHome"
-set "CY_API_KEY=$Key"
-chcp 65001 >nul
-cls
-type "$SplashFile"
-cd /d "$env:USERPROFILE"
-"$CyBin"
-del "$SplashFile" >nul 2>&1
-del "$CmdFile" >nul 2>&1
-"@
-[IO.File]::WriteAllText($CmdFile, $cmdBody)
+$Inner = Join-Path $CyHome '.cy_launch.ps1'
+$env:CY_LAUNCH_CY_BIN = $CyBin
+$env:CY_LAUNCH_BRIDGE = $Bridge
+$env:CY_LAUNCH_AUTH_SERVER = $AuthServer
+$env:CY_LAUNCH_CY_HOME = $CyHome
+$env:CY_LAUNCH_AUTH_FILE = $AuthFile
+$env:CY_LAUNCH_PORT = "$Port"
+$env:CY_LAUNCH_SPLASH_FILE = $SplashFile
+$innerBody = @'
+$ErrorActionPreference = 'Stop'
 
-# --- Open the terminal with the splash, then the CLI --------------------------------------
+$CyBin = $env:CY_LAUNCH_CY_BIN
+$Bridge = $env:CY_LAUNCH_BRIDGE
+$AuthServer = $env:CY_LAUNCH_AUTH_SERVER
+$CyHome = $env:CY_LAUNCH_CY_HOME
+$AuthFile = $env:CY_LAUNCH_AUTH_FILE
+$Port = [int]$env:CY_LAUNCH_PORT
+$SplashFile = $env:CY_LAUNCH_SPLASH_FILE
+
+function Read-Key {
+    if ($env:CY_API_KEY -and $env:CY_API_KEY.Trim()) {
+        return $env:CY_API_KEY.Trim()
+    }
+    if (-not (Test-Path $AuthFile)) { return $null }
+    try {
+        $data = Get-Content $AuthFile -Raw | ConvertFrom-Json
+        foreach ($field in @('cy_api_key', 'CY_API_KEY')) {
+            $value = $data.$field
+            if ($value -is [string] -and $value.Trim()) { return $value.Trim() }
+        }
+    } catch { }
+    return $null
+}
+
+function Find-Python {
+    foreach ($name in @('python.exe', 'python3.exe', 'py.exe')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) { return $command.Source }
+    }
+    return $null
+}
+
+function Test-Port {
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $client.Connect('127.0.0.1', $Port)
+        $client.Close()
+        return $true
+    } catch { return $false }
+}
+
+function Write-Auth {
+    param([string]$Key)
+
+    $data = if (Test-Path $AuthFile) {
+        try { Get-Content $AuthFile -Raw | ConvertFrom-Json } catch { [ordered]@{} }
+    } else {
+        [ordered]@{}
+    }
+    if ($null -eq $data -or $data -isnot [pscustomobject]) {
+        $data = [ordered]@{}
+    }
+    $data.auth_mode = 'apiKey'
+    $data.cy_api_key = $Key
+    $data.CY_API_KEY = $Key
+    $data | ConvertTo-Json -Depth 10 | Set-Content -Path $AuthFile -Encoding UTF8
+}
+
+function Start-Bridge {
+    param([string]$Key)
+
+    if (Test-Port $Port) { return }
+    if (-not $Bridge) { Write-Error 'CY: cy_bridge.py not found.' }
+    $python = Find-Python
+    if (-not $python) { Write-Error 'CY: python.exe, python3.exe, or py.exe not found.' }
+    $env:CY_API_BASE_URL = if ($env:CY_API_BASE_URL) { $env:CY_API_BASE_URL } else { 'https://cy.symbiotyc.workers.dev/v1' }
+    $env:CY_BRIDGE_PORT = "$Port"
+    $env:CY_HOME = $CyHome
+    $env:CY_API_KEY = $Key
+    $bridgeArgs = @()
+    if ((Split-Path -Leaf $python) -eq 'py.exe') { $bridgeArgs += '-3' }
+    $bridgeArgs += $Bridge
+    Start-Process -FilePath $python -ArgumentList $bridgeArgs -WindowStyle Hidden
+    for ($i = 0; $i -lt 50; $i++) {
+        if (Test-Port $Port) { return }
+        Start-Sleep -Milliseconds 100
+    }
+    Write-Error "CY: bridge did not become ready on port $Port."
+}
+
+try {
+    $env:CX_HOME = $CyHome
+    $env:CODEX_HOME = $CyHome
+    $env:CY_HOME = $CyHome
+    $env:CY_BASE_URL = "http://127.0.0.1:$Port/v1"
+
+    Clear-Host
+    Get-Content $SplashFile
+    Write-Host ''
+
+    $Key = Read-Key
+    if (-not $Key) {
+        $answer = Read-Host '  Sign in with Google? [Y/n]'
+        if ($answer -match '^[nN]') {
+            Write-Host ''
+            Write-Host '  CY needs an API key to work. Launch CY again when ready.'
+            [Console]::ReadLine() | Out-Null
+            exit 1
+        }
+        if (-not $AuthServer -or -not (Test-Path $AuthServer)) {
+            Write-Error 'CY authorization helper is missing.'
+        }
+        Write-Host ''
+        Write-Host '  Opening browser — sign in with Google, the key saves automatically...'
+        $python = Find-Python
+        if (-not $python) { Write-Error 'CY: python.exe, python3.exe, or py.exe not found.' }
+        $authArgs = @()
+        if ((Split-Path -Leaf $python) -eq 'py.exe') { $authArgs += '-3' }
+        $authArgs += $AuthServer
+        & $python @authArgs
+        $Key = Read-Key
+        if (-not $Key) {
+            Write-Host ''
+            Write-Host '  Sign-in did not complete. Launch CY again to retry.'
+            [Console]::ReadLine() | Out-Null
+            exit 1
+        }
+        Write-Auth $Key
+        Write-Host '  Signed in. Starting CY...'
+        Start-Sleep -Seconds 1
+    }
+
+    $env:CY_API_KEY = $Key
+    Start-Bridge $Key
+    $home = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+    Set-Location $home
+    & $CyBin @args
+} finally {
+    Remove-Item $SplashFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
+}
+'@
+[IO.File]::WriteAllText($Inner, $innerBody, [Text.Encoding]::UTF8)
+
+if ($env:CY_LAUNCH_INLINE -eq '1') {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Inner @args
+    exit $LASTEXITCODE
+}
+
+$quotedInner = '"' + $Inner.Replace('"', '\"') + '"'
+$launcherArgs = @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $quotedInner) + @args
 $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
 if ($wt) {
-    Start-Process wt.exe -ArgumentList "cmd.exe /k `"$CmdFile`""
+    Start-Process wt.exe -ArgumentList $launcherArgs
 } else {
-    Start-Process cmd.exe -ArgumentList "/k `"$CmdFile`""
+    Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $quotedInner) + @args
 }

@@ -9,7 +9,7 @@ import http.server
 import json
 import os
 import sys
-import subprocess
+import webbrowser
 import threading
 import time
 
@@ -114,7 +114,8 @@ def main():
     # Open browser
     auth_url = f"{AUTH_URL}/auth/google?callback=http://127.0.0.1:{PORT}/callback"
     try:
-        subprocess.Popen(["open", auth_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not webbrowser.open(auth_url):
+            raise RuntimeError("webbrowser.open returned false")
     except Exception:
         print(f"Не удалось открыть браузер. Перейдите вручную:")
         print(f"  {auth_url}")

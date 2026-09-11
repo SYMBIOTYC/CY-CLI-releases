@@ -273,4 +273,4 @@ rm -f "\$CMD_FILE"
 CMD_EOF
 chmod +x "$CMD_FILE"
 
-open -n -a Terminal "$CMD_FILE"
+open -a Terminal "$CMD_FILE"

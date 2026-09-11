@@ -124,7 +124,12 @@ jobs:
           cp release-repo/tools/launch-cy.sh launch-cy.sh
           chmod +x launch-cy.sh cy
           cp release-repo/packaging/bridge/cy_bridge.py cy_bridge.py
-          tar czf ${{ matrix.artifact }} cy launch-cy.sh cy_bridge.py
+          cp release-repo/packaging/bridge/cy_auth_server.py cy_auth_server.py
+          mkdir -p themes
+          cp release-repo/packaging/themes/*.tmTheme themes/
+          test -f cy_auth_server.py
+          test -d themes
+          tar czf ${{ matrix.artifact }} cy launch-cy.sh cy_bridge.py cy_auth_server.py themes
           sha256sum ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
 
       - name: Upload artifacts
