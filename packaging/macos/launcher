@@ -208,6 +208,63 @@ ${PINK}${BOLD}
 ${PINK}${BOLD}CY${RESET}
 SPLASH_EOF
 
+# --- Install self-sufficient `cy` shim on PATH (no manual steps) ------------
+# The shim ensures the bridge is running and execs the bundled binary,
+# so `cy` works in any terminal even if the app was never launched
+# in this login session (e.g. after reboot).
+mkdir -p "$HOME/.local/bin"
+cat > "$HOME/.local/bin/cy" <<'SHIM_EOF'
+#!/bin/bash
+# CY CLI terminal shim - auto-installed by CY CLI.app launcher.
+APP="${CY_APP:-/Applications/CY CLI.app}"
+CY_BIN="$APP/Contents/MacOS/cy"
+BRIDGE="$APP/Contents/Resources/cy_bridge.py"
+if [ ! -x "$CY_BIN" ]; then
+  echo "CY: app not found at $APP. Reinstall CY CLI." >&2
+  exit 1
+fi
+CY_HOME="${CY_HOME:-$HOME/.cy}"
+PORT="${CY_BRIDGE_PORT:-8790}"
+mkdir -p "$CY_HOME"
+AUTH_FILE="$CY_HOME/auth.json"
+KEY="${CY_API_KEY:-}"
+if [ -z "$KEY" ] && [ -f "$AUTH_FILE" ]; then
+  KEY="$(python3 -c "
+import json
+try:
+    with open('$AUTH_FILE') as f:
+        data = json.load(f)
+    v = data.get('cy_api_key') or data.get('CY_API_KEY') or ''
+    print(v if isinstance(v, str) else '')
+except Exception:
+    print('')
+" 2>/dev/null || true)"
+fi
+KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
+if [ -z "$KEY" ]; then
+  open "https://auth.symbiotyc.workers.dev" 2>/dev/null || true
+  echo "CY: no API key. Sign in in the browser, then run: cy login --with-api-key" >&2
+  exit 1
+fi
+if ! bash -c "exec 3<>/dev/tcp/127.0.0.1/$PORT" 2>/dev/null; then
+  PYTHON="$(command -v python3 || true)"
+  [ -z "$PYTHON" ] && { echo "CY: python3 not found." >&2; exit 1; }
+  CY_API_BASE_URL="${CY_API_BASE_URL:-https://cy.symbiotyc.workers.dev/v1}" \
+  CY_BRIDGE_PORT="$PORT" \
+  CY_HOME="$CY_HOME" \
+  CY_API_KEY="$KEY" \
+  nohup "$PYTHON" "$BRIDGE" >"$CY_HOME/bridge.log" 2>&1 &
+  disown 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    bash -c "exec 3<>/dev/tcp/127.0.0.1/$PORT" 2>/dev/null && break
+    sleep 0.1
+  done
+fi
+export CX_HOME="$CY_HOME" CODEX_HOME="$CY_HOME" CY_API_KEY="$KEY"
+exec "$CY_BIN" "$@"
+SHIM_EOF
+chmod +x "$HOME/.local/bin/cy"
+
 # --- Open Terminal with the splash, then the CLI ---------------------------
 export CX_HOME="$CY_HOME"
 export CODEX_HOME="$CY_HOME"
